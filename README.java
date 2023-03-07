@@ -1,89 +1,23 @@
 import org.junit.jupiter.api.Test;
-import java.security.cert.X509Certificate;
-import java.time.LocalDateTime;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
 import static org.mockito.Mockito.*;
 
-class CertificateCheckerTest {
+class IcoStateChekerJobTest {
 
     @Test
-    void checkDate_shouldLogMessage1_whenCertificateNotYetValid() throws Exception {
+    void execute_shouldCallIcoStateCheckerServiceCheckMethod() throws JobExecutionException {
         // Arrange
-        CertificateInfo certificateInfo = mock(CertificateInfo.class);
-        X509Certificate cert = mock(X509Certificate.class);
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime notBefore = now.plusDays(1);
-        when(certificateInfo.getCertificate()).thenReturn(cert);
-        when(cert.getNotBefore()).thenReturn(notBefore);
-        when(certificateInfo.getThumbprint()).thenReturn("thumbprint");
-        when(certificateInfo.getOriginFilePath()).thenReturn("/path/to/cert.pem");
-        int deadLineWarn = 30;
-        int deadLineError = 7;
+        IcoStateChekerService icoStateChekerService = mock(IcoStateChekerService.class);
+        IcoStateChekerJob icoStateChekerJob = new IcoStateChekerJob();
+        JobExecutionContext context = mock(JobExecutionContext.class);
+        when(context.getJobDetail().getJobClass()).thenReturn(IcoStateChekerJob.class);
+        when(context.getJobDetail().getJobDataMap()).thenReturn(new JobDataMap());
 
         // Act
-        CertificateChecker.checkDate(certificateInfo, now, deadLineWarn, deadLineError);
+        icoStateChekerJob.execute(context);
 
         // Assert
-        verify(CertificateChecker.LOGGER).debug("message 1");
+        verify(icoStateChekerService).check();
     }
-
-    @Test
-    void checkDate_shouldLogMessage2_whenCertificateExpired() throws Exception {
-        // Arrange
-        CertificateInfo certificateInfo = mock(CertificateInfo.class);
-        X509Certificate cert = mock(X509Certificate.class);
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime notAfter = now.minusDays(1);
-        when(certificateInfo.getCertificate()).thenReturn(cert);
-        when(cert.getNotAfter()).thenReturn(notAfter);
-        when(certificateInfo.getThumbprint()).thenReturn("thumbprint");
-        when(certificateInfo.getOriginFilePath()).thenReturn("/path/to/cert.pem");
-        int deadLineWarn = 30;
-        int deadLineError = 7;
-
-        // Act
-        CertificateChecker.checkDate(certificateInfo, now, deadLineWarn, deadLineError);
-
-        // Assert
-        verify(CertificateChecker.LOGGER).debug("message 2");
-    }
-
-    @Test
-    void checkDate_shouldLogMessage3_whenCertificateExpiresSoon() throws Exception {
-        // Arrange
-        CertificateInfo certificateInfo = mock(CertificateInfo.class);
-        X509Certificate cert = mock(X509Certificate.class);
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime notAfter = now.plusDays(5);
-        when(certificateInfo.getCertificate()).thenReturn(cert);
-        when(cert.getNotAfter()).thenReturn(notAfter);
-        when(certificateInfo.getThumbprint()).thenReturn("thumbprint");
-        when(certificateInfo.getOriginFilePath()).thenReturn("/path/to/cert.pem");
-        int deadLineWarn = 30;
-        int deadLineError = 7;
-
-        // Act
-        CertificateChecker.checkDate(certificateInfo, now, deadLineWarn, deadLineError);
-
-        // Assert
-        verify(CertificateChecker.LOGGER).debug("message 3");
-    }
-
-    @Test
-    void checkDate_shouldLogMessage4_whenCertificateExpiresSoonButNotInErrorRange() throws Exception {
-        // Arrange
-        CertificateInfo certificateInfo = mock(CertificateInfo.class);
-        X509Certificate cert = mock(X509Certificate.class);
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime notAfter = now.plusDays(20);
-        when(certificateInfo.getCertificate()).thenReturn(cert);
-        when(cert.getNotAfter()).thenReturn(notAfter);
-        when(certificateInfo.getThumbprint()).thenReturn("thumbprint");
-        when(certificateInfo.getOriginFilePath()).thenReturn("/path/to/cert.pem");
-        int deadLineWarn = 30;
-        int deadLineError = 7;
-
-        // Act
-        CertificateChecker.checkDate(certificateInfo, now, deadLineWarn, deadLineError);
-
-        // Assert
-        verify(CertificateChecker.LOGGER).debug("
+}
