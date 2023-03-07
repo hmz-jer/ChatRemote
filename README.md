@@ -1,55 +1,79 @@
-import java.io.*;
-import java.net.*;
-import javax.net.ssl.*;
-import javax.xml.parsers.*;
-import org.w3c.dom.*;
-import javax.xml.transform.*;
-import javax.xml.transform.dom.*;
-import javax.xml.transform.stream.*;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
+import org.slf4j.Logger;
 
-public class SSLClient {
-    public static void main(String[] args) {
-        try {
-            // Créez une connexion SSL à l'hôte et au port spécifiés
-            SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-            SSLSocket socket = (SSLSocket) factory.createSocket("host", 443);
+public class CertificateCheckerTest {
 
-            // Récupérez les entrées et les sorties du socket
-            InputStream input = socket.getInputStream();
-            OutputStream output = socket.getOutputStream();
+    private static CertificateInfo certificateInfoMock;
+    private static X509Certificate x509CertificateMock;
+    private static LocalDateTime dateTime;
 
-            // Boucle pour gérer les messages reçus et envoyés
-            while (true) {
-                // Lisez le message reçu du serveur
-                BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-                String message = reader.readLine();
-
-                // Vérifiez le message reçu et envoyez un message XML en conséquence
-                DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-                DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-                Document doc = docBuilder.newDocument();
-
-                if (message.equals("Request 1")) {
-                    Element rootElement = doc.createElement("Response");
-                    doc.appendChild(rootElement);
-                    rootElement.setAttribute("type", "1");
-                    rootElement.appendChild(doc.createTextNode("Response 1"));
-                } else if (message.equals("Request 2")) {
-                    Element rootElement = doc.createElement("Response");
-                    doc.appendChild(rootElement);
-                    rootElement.setAttribute("type", "2");
-                    rootElement.appendChild(doc.createTextNode("Response 2"));
-                }
-
-                // Écrivez le message XML sur la sortie du socket
-                TransformerFactory transformerFactory = TransformerFactory.newInstance();
-                Transformer transformer = transformerFactory.newTransformer();
-                DOMSource source = new DOMSource(doc);
-                StreamResult result = new StreamResult(output);
-                transformer.transform(source, result);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    @BeforeClass
+    public static void setUp() {
+        certificateInfoMock = mock(CertificateInfo.class);
+        x509CertificateMock = mock(X509Certificate.class);
+        dateTime = LocalDateTime.now();
     }
-}
+
+    @Test
+    public void checkDate_withValidCertificateInfoAndDateTime_logsMessages() {
+        // GIVEN
+        int deadLineWarn = 30;
+        int deadLineError = 7;
+        long daysBeforeNotBefore = -10;
+        long daysBeforeNotAfterError = 2;
+        long daysBeforeNotAfterWarn = 20;
+        when(certificateInfoMock.getCertificate()).thenReturn(x509CertificateMock);
+        when(certificateInfoMock.getOriginFilePath()).thenReturn("file/path");
+        try {
+            when(certificateInfoMock.getThumbprint()).thenReturn("thumbprint");
+        } catch (Exception e) {
+            fail("An exception occurred while mocking the CertificateInfo object: " + e.getMessage());
+        }
+        when(x509CertificateMock.getNotBefore()).thenReturn(dateTime.plusDays(daysBeforeNotBefore).atZone(ZoneId.systemDefault()).toInstant());
+        when(x509CertificateMock.getNotAfter()).thenReturn(dateTime.plusDays(daysBeforeNotAfterWarn).atZone(ZoneId.systemDefault()).toInstant());
+
+        // WHEN
+        CertificateChecker.checkDate(certificateInfoMock, dateTime, deadLineWarn, deadLineError);
+
+        // THEN
+        verify(x509CertificateMock, times(1)).getNotBefore();
+        verify(x509CertificateMock, times(2)).getNotAfter();
+        Logger logger = LoggerFactory.getLogger(CertificateChecker.class);
+        verify(logger, times(1)).debug("message 1");
+        verify(logger, times(1)).debug("message 4");
+    }
+
+    @Test
+    public void checkDate_withExpiredCertificateInfoAndDateTime_logsMessages() {
+        // GIVEN
+        int deadLineWarn = 30;
+        int deadLineError = 7;
+        long daysBeforeNotBefore = -10;
+        long daysBeforeNotAfterError = 2;
+        long daysBeforeNotAfterWarn = -2;
+        when(certificateInfoMock.getCertificate()).thenReturn(x509CertificateMock);
+        when(certificateInfoMock.getOriginFilePath()).thenReturn("file/path");
+        try {
+            when(certificateInfoMock.getThumbprint()).thenReturn("thumbprint");
+        } catch (Exception e) {
+            fail("An exception occurred while mocking the CertificateInfo object: " + e.getMessage());
+        }
+        when(x509CertificateMock.getNotBefore()).thenReturn(dateTime.plusDays(daysBeforeNotBefore).atZone(ZoneId.systemDefault()).toInstant());
+        when(x509CertificateMock.getNotAfter()).thenReturn(dateTime.plusDays(daysBeforeNotAfterWarn).atZone(ZoneId.systemDefault()).toInstant());
+
+        // WHEN
+        CertificateChecker.checkDate(certificateInfoMock, dateTime, deadLineWarn, deadLineError);
+
+        // THEN
+        verify(x509CertificateMock, times(1)).getNotBefore();
+        verify(x509CertificateMock, times(2)).getNotAfter();
+        Logger logger = LoggerFactory.getLogger(CertificateChecker.class);
+        verify(logger, times(1)).debug("message 1");
+        verify(logger, times(1
