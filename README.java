@@ -1,7 +1,10 @@
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
 import org.junit.*;
 import org.mockito.*;
+
+import java.lang.reflect.Field;
+
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 public class IcoStateChekerServiceTest {
 
@@ -12,7 +15,7 @@ public class IcoStateChekerServiceTest {
     public void setup() {
         socketController = mock(SocketController.class);
         service = IcoStateChekerService.getInstance();
-        Whitebox.setInternalState(service, "socketController", socketController);
+        setPrivateField(service, "socketController", socketController);
     }
 
     @Test
@@ -20,13 +23,13 @@ public class IcoStateChekerServiceTest {
         // Arrange
         IcoStatus status = new IcoStatus("UP");
         when(socketController.runningThreadStatus()).thenReturn(status);
-        String icoStatus = Whitebox.getInternalState(service, "icoStatus");
+        String icoStatus = getPrivateField(service, "icoStatus");
 
         // Act
         service.check();
 
         // Assert
-        assertEquals(icoStatus, Whitebox.getInternalState(service, "icoStatus"));
+        assertEquals(icoStatus, getPrivateField(service, "icoStatus"));
         verifyZeroInteractions(RsLogEnum.class);
     }
 
@@ -35,13 +38,20 @@ public class IcoStateChekerServiceTest {
         // Arrange
         IcoStatus status = new IcoStatus("DEGRADED");
         when(socketController.runningThreadStatus()).thenReturn(status);
-        String icoStatus = Whitebox.getInternalState(service, "icoStatus");
+        String icoStatus = getPrivateField(service, "icoStatus");
 
         // Act
         service.check();
 
         // Assert
-        assertNotEquals(icoStatus, Whitebox.getInternalState(service, "icoStatus"));
+        assertNotEquals(icoStatus, getPrivateField(service, "icoStatus"));
         verify(RsLogEnum.ICON_STATE_TRANSITION_DEGRADED).generateLog(icoStatus, "DEGRADED");
     }
-}
+
+    private void setPrivateField(Object target, String fieldName, Object value) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw
