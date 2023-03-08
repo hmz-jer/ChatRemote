@@ -1,51 +1,68 @@
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
 
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.spec.InvalidKeySpecException;
+import java.io.FileNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.Assert.*;
 
-public class TestGeneratePrivateKeyFromDER {
+public class TestManager {
+
+    private static final String[] VALID_ARGS = new String[]{"arg1", "arg2", "arg3", "arg4", "arg5", "arg6", "arg7", "arg8", "arg9"};
 
     @Test
-    public void testGeneratePrivateKeyFromDER_GivenValidKeyBytes_WhenCalled_ThenReturnPrivateKey() throws InvalidKeySpecException, NoSuchAlgorithmException {
-        // GIVEN: des octets de clé valides
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-        byte[] keyBytes = keyGen.generateKeyPair().getPrivate().getEncoded();
+    public void testPostExec_GivenValidArgsWithoutGenerateKeystore_WhenCalled_ThenReturnSameArgs() throws FileNotFoundException {
+        // GIVEN: des arguments valides sans l'argument "buildkeystore"
+        String[] args = VALID_ARGS.clone();
 
-        // WHEN: on appelle la méthode generatePrivateKeyFromDER avec les octets de clé
-        RSAPrivateKey privateKey = generatePrivateKeyFromDER(keyBytes);
+        // WHEN: on appelle la méthode postExec avec les arguments
+        String[] result = Manager.postExec(args);
 
-        // THEN: la méthode doit retourner une clé privée RSA valide
-        assertNotNull(privateKey);
-        assertEquals("RSA", privateKey.getAlgorithm());
-        assertEquals(2048, privateKey.getModulus().bitLength());
+        // THEN: la méthode doit retourner les mêmes arguments
+        assertArrayEquals(args, result);
     }
 
     @Test
-    public void testGeneratePrivateKeyFromDER_GivenEmptyKeyBytes_WhenCalled_ThenGenerateNewPrivateKey() throws InvalidKeySpecException, NoSuchAlgorithmException {
-        // GIVEN: des octets de clé vides
-        byte[] keyBytes = new byte[0];
+    public void testPostExec_GivenValidArgsWithGenerateKeystore_WhenCalled_ThenReturnSameArgs() throws FileNotFoundException {
+        // GIVEN: des arguments valides avec l'argument "buildkeystore"
+        String[] args = new String[]{Manager.ARG_GENERATE_KEYSTORE};
 
-        // WHEN: on appelle la méthode generatePrivateKeyFromDER avec les octets de clé vides
-        RSAPrivateKey privateKey = generatePrivateKeyFromDER(keyBytes);
+        // WHEN: on appelle la méthode postExec avec les arguments
+        String[] result = Manager.postExec(args);
 
-        // THEN: la méthode doit générer une nouvelle clé privée RSA valide
-        assertNotNull(privateKey);
-        assertEquals("RSA", privateKey.getAlgorithm());
-        assertEquals(2048, privateKey.getModulus().bitLength());
+        // THEN: la méthode doit retourner les mêmes arguments
+        assertArrayEquals(args, result);
     }
 
-    @Test(expected = InvalidKeySpecException.class)
-    public void testGeneratePrivateKeyFromDER_GivenInvalidKeyBytes_WhenCalled_ThenThrowInvalidKeySpecException() throws InvalidKeySpecException, NoSuchAlgorithmException {
-        // GIVEN: des octets de clé invalides
-        byte[] keyBytes = new byte[]{1, 2, 3, 4};
+    @Test
+    public void testPostExec_GivenValidArgsWithExistingStatusAndConfigurationFiles_WhenCalled_ThenReturnSubsetOfArgs() throws FileNotFoundException {
+        // GIVEN: des arguments valides avec des fichiers de statut et de configuration existants
+        String[] args = new String[]{"status_file_path", "config_file_path", "arg1", "arg2", "arg3", "arg4", "arg5", "arg6", "arg7", "arg8", "arg9"};
 
-        // WHEN: on appelle la méthode generatePrivateKeyFromDER avec les octets de clé invalides
-        generatePrivateKeyFromDER(keyBytes);
+        // WHEN: on appelle la méthode postExec avec les arguments
+        String[] result = Manager.postExec(args);
 
-        // THEN: la méthode doit lancer une exception InvalidKeySpecException
+        // THEN: la méthode doit retourner un sous-ensemble des arguments, sans le chemin des fichiers de statut et de configuration
+        assertEquals(args.length - 2, result.length);
+        assertTrue(StringUtils.isNotBlank(result[0]));
+        assertTrue(StringUtils.isNotBlank(result[1]));
+    }
+
+    @Test
+    public void testPostExec_GivenValidArgsWithMissingStatusOrConfigurationFiles_WhenCalled_ThenExitWithErrorCode() throws FileNotFoundException {
+        // GIVEN: des arguments valides avec un fichier de statut ou de configuration manquant
+        String[] args = new String[]{"missing_status_file_path", "missing_config_file_path", "arg1", "arg2", "arg3", "arg4", "arg5", "arg6", "arg7", "arg8", "arg9"};
+
+        // WHEN: on appelle la méthode postExec avec les arguments
+        try {
+            Manager.postExec(args);
+        } catch (Exception e) {
+            // THEN: la méthode doit quitter le programme avec un code d'erreur
+            assertEquals(-1, e.getMessage());
+        }
     }
 }
