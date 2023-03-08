@@ -1,77 +1,47 @@
-import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
+import org.junit.*;
+import org.mockito.*;
 
-import java.util.Map;
+public class IcoStateChekerServiceTest {
 
-import static org.junit.jupiter.api.Assertions.*;
+    private SocketController socketController;
+    private IcoStateChekerService service;
 
-class ArgumentMapperTest {
-
-    @Test
-    void parseArguments_returnsEmptyMap_whenGivenNull() {
-        // GIVEN
-        String[] args = null;
-
-        // WHEN
-        Map<String, String> result = ArgumentMapper.parseArguments(args);
-
-        // THEN
-        assertTrue(result.isEmpty());
+    @Before
+    public void setup() {
+        socketController = mock(SocketController.class);
+        service = IcoStateChekerService.getInstance();
+        Whitebox.setInternalState(service, "socketController", socketController);
     }
 
     @Test
-    void parseArguments_returnsEmptyMap_whenGivenEmptyArray() {
-        // GIVEN
-        String[] args = new String[]{};
+    public void testCheck_withSameIcoStatus_shouldNotGenerateLog() {
+        // Arrange
+        IcoStatus status = new IcoStatus("UP");
+        when(socketController.runningThreadStatus()).thenReturn(status);
+        String icoStatus = Whitebox.getInternalState(service, "icoStatus");
 
-        // WHEN
-        Map<String, String> result = ArgumentMapper.parseArguments(args);
+        // Act
+        service.check();
 
-        // THEN
-        assertTrue(result.isEmpty());
+        // Assert
+        assertEquals(icoStatus, Whitebox.getInternalState(service, "icoStatus"));
+        verifyZeroInteractions(RsLogEnum.class);
     }
 
     @Test
-    void parseArguments_returnsCorrectMap_whenGivenValidArguments() {
-        // GIVEN
-        String[] args = new String[]{"programName", "-arg1", "value1", "-arg2", "value2"};
+    public void testCheck_withDifferentIcoStatus_shouldGenerateLog() {
+        // Arrange
+        IcoStatus status = new IcoStatus("DEGRADED");
+        when(socketController.runningThreadStatus()).thenReturn(status);
+        String icoStatus = Whitebox.getInternalState(service, "icoStatus");
 
-        // WHEN
-        Map<String, String> result = ArgumentMapper.parseArguments(args);
+        // Act
+        service.check();
 
-        // THEN
-        assertEquals("value1", result.get("arg1"));
-        assertEquals("value2", result.get("arg2"));
-        assertNull(result.get("programName"));
-        assertEquals(2, result.size());
-    }
-
-    @Test
-    void parseArguments_returnsCorrectMap_whenGivenArgumentsWithRepeatedKeys() {
-        // GIVEN
-        String[] args = new String[]{"programName", "-arg1", "value1", "-arg2", "value2", "-arg1", "value3"};
-
-        // WHEN
-        Map<String, String> result = ArgumentMapper.parseArguments(args);
-
-        // THEN
-        assertEquals("value3", result.get("arg1"));
-        assertEquals("value2", result.get("arg2"));
-        assertNull(result.get("programName"));
-        assertEquals(2, result.size());
-    }
-
-    @Test
-    void parseArguments_returnsCorrectMap_whenGivenArgumentsWithoutValues() {
-        // GIVEN
-        String[] args = new String[]{"programName", "-arg1", "-arg2", "value2"};
-
-        // WHEN
-        Map<String, String> result = ArgumentMapper.parseArguments(args);
-
-        // THEN
-        assertEquals("", result.get("arg1"));
-        assertEquals("value2", result.get("arg2"));
-        assertNull(result.get("programName"));
-        assertEquals(2, result.size());
+        // Assert
+        assertNotEquals(icoStatus, Whitebox.getInternalState(service, "icoStatus"));
+        verify(RsLogEnum.ICON_STATE_TRANSITION_DEGRADED).generateLog(icoStatus, "DEGRADED");
     }
 }
