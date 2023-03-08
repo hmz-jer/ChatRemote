@@ -54,4 +54,17 @@ public class IcoStateChekerServiceTest {
             field.setAccessible(true);
             field.set(target, value);
         } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw
+            throw new RuntimeException("Unable to set private field " + fieldName + " in " + target.getClass().getName(), e);
+        }
+    }
+
+    private Object getPrivateField(Object target, String fieldName) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(target);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException("Unable to get private field " + fieldName + " in " + target.getClass().getName(), e);
+        }
+    }
+}
