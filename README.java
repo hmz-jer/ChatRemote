@@ -1,23 +1,25 @@
-import org.junit.jupiter.api.Test;
-import org.quartz.JobExecutionContext;
-import org.quartz.JobExecutionException;
-import static org.mockito.Mockito.*;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
-class IcoStateChekerJobTest {
+public class SSLManagerTest {
 
     @Test
-    void execute_shouldCallIcoStateCheckerServiceCheckMethod() throws JobExecutionException {
-        // Arrange
-        IcoStateChekerService icoStateChekerService = mock(IcoStateChekerService.class);
-        IcoStateChekerJob icoStateChekerJob = new IcoStateChekerJob();
-        JobExecutionContext context = mock(JobExecutionContext.class);
-        when(context.getJobDetail().getJobClass()).thenReturn(IcoStateChekerJob.class);
-        when(context.getJobDetail().getJobDataMap()).thenReturn(new JobDataMap());
+    public void testParseDERFromPEN() {
 
-        // Act
-        icoStateChekerJob.execute(context);
+        SSLManager sslManager = new SSLManager();
 
-        // Assert
-        verify(icoStateChekerService).check();
+        // Test with valid input
+        String beginDelimiter = "-----BEGIN CERTIFICATE-----";
+        String endDelimiter = "-----END CERTIFICATE-----";
+        String pem = beginDelimiter + "\n" + "BASE64_ENCODED_CERTIFICATE_DATA" + "\n" + endDelimiter;
+        byte[] expected = DatatypeConverter.parseBase64Binary("BASE64_ENCODED_CERTIFICATE_DATA");
+        byte[] actual = sslManager.parseDERFromPEN(pem.getBytes(), beginDelimiter, endDelimiter);
+        assertArrayEquals(expected, actual);
+
+        // Test with invalid input
+        pem = "INVALID_CERTIFICATE_DATA";
+        expected = new byte[0];
+        actual = sslManager.parseDERFromPEN(pem.getBytes(), beginDelimiter, endDelimiter);
+        assertArrayEquals(expected, actual);
     }
 }
