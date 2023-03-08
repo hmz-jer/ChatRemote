@@ -1,166 +1,77 @@
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class WatcherTest {
+class ArgumentMapperTest {
 
     @Test
-    void testStart() {
+    void parseArguments_returnsEmptyMap_whenGivenNull() {
         // GIVEN
-        Watcher watcher = Watcher.getInstance();
+        String[] args = null;
 
         // WHEN
-        watcher.start();
+        Map<String, String> result = ArgumentMapper.parseArguments(args);
 
         // THEN
-        assertNotNull(watcher.timer);
-        assertNotNull(watcher.task);
-        assertEquals(14400L, watcher.period);
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    void testStop() {
+    void parseArguments_returnsEmptyMap_whenGivenEmptyArray() {
         // GIVEN
-        Watcher watcher = Watcher.getInstance();
-        watcher.start();
+        String[] args = new String[]{};
 
         // WHEN
-        watcher.stop();
+        Map<String, String> result = ArgumentMapper.parseArguments(args);
 
         // THEN
-        assertNull(watcher.timer);
-        assertNull(watcher.task);
+        assertTrue(result.isEmpty());
     }
 
     @Test
-    void testIPMessagesCounter() {
+    void parseArguments_returnsCorrectMap_whenGivenValidArguments() {
         // GIVEN
-        Watcher watcher = Watcher.getInstance();
-        CounterManager.setWatchingIPMessagesCunter(-1);
-        AtomicBoolean isAlertIPSent = watcher.isAlertIPSent;
+        String[] args = new String[]{"programName", "-arg1", "value1", "-arg2", "value2"};
 
         // WHEN
-        watcher.start();
+        Map<String, String> result = ArgumentMapper.parseArguments(args);
 
         // THEN
-        assertTrue(isAlertIPSent.get());
+        assertEquals("value1", result.get("arg1"));
+        assertEquals("value2", result.get("arg2"));
+        assertNull(result.get("programName"));
+        assertEquals(2, result.size());
     }
 
     @Test
-    void testSwipMessagesCounter() {
+    void parseArguments_returnsCorrectMap_whenGivenArgumentsWithRepeatedKeys() {
         // GIVEN
-        Watcher watcher = Watcher.getInstance();
-        CounterManager.setWatchingSwipMessagesCounter(0);
-        AtomicBoolean isAlertSwipSent = watcher.isAlertSwipSent;
+        String[] args = new String[]{"programName", "-arg1", "value1", "-arg2", "value2", "-arg1", "value3"};
 
         // WHEN
-        watcher.start();
+        Map<String, String> result = ArgumentMapper.parseArguments(args);
 
         // THEN
-        assertTrue(isAlertSwipSent.get());
+        assertEquals("value3", result.get("arg1"));
+        assertEquals("value2", result.get("arg2"));
+        assertNull(result.get("programName"));
+        assertEquals(2, result.size());
     }
 
     @Test
-    void testIPDSXMessagesCounter() {
+    void parseArguments_returnsCorrectMap_whenGivenArgumentsWithoutValues() {
         // GIVEN
-        Watcher watcher = Watcher.getInstance();
-        CounterManager.setWatchingIPMessagesCunter(-1);
-        AtomicBoolean isAlertIPDSXSent = watcher.isAlertIPDSXSent;
+        String[] args = new String[]{"programName", "-arg1", "-arg2", "value2"};
 
         // WHEN
-        watcher.start();
+        Map<String, String> result = ArgumentMapper.parseArguments(args);
 
         // THEN
-        assertTrue(isAlertIPDSXSent.get());
+        assertEquals("", result.get("arg1"));
+        assertEquals("value2", result.get("arg2"));
+        assertNull(result.get("programName"));
+        assertEquals(2, result.size());
     }
 }
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import java.util.Timer;
-import java.util.TimerTask;
-
-import static org.mockito.Mockito.*;
-
-class WatcherTest {
-
-    @Test
-    void testWatcherTask() {
-        // GIVEN
-        Watcher watcher = Watcher.getInstance();
-        CounterManager.setWatchingIPMessagesCunter(-1);
-
-        // Créez un mock pour le TimerTask
-        TimerTask taskMock = mock(TimerTask.class);
-
-        // Simuler le temps qui s'écoule de 4 heures
-        long fourHoursInMillis = 4 * 60 * 60 * 1000L;
-        Mockito.doAnswer(invocation -> {
-            // Appelez la méthode run() du TimerTask simulée
-            taskMock.run();
-            return null;
-        }).when(taskMock).scheduledExecutionTime();
-
-        // Configurez le Timer pour utiliser le mock TimerTask
-        Timer timerMock = mock(Timer.class);
-        doReturn(timerMock).when(watcher).getTimer();
-        doReturn(taskMock).when(watcher).getTask();
-
-        // WHEN
-        watcher.start();
-
-        // Attendre que le TimerTask soit exécuté
-        try {
-            Thread.sleep(fourHoursInMillis);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        // THEN
-        // Vérifiez que la méthode run() du TimerTask a été appelée
-        verify(taskMock, times(1)).run();
-    }
-}
-package org.example;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
-
-import java.util.Timer;
-import java.util.TimerTask;
-
-import static org.mockito.Mockito.*;
-
-@RunWith(MockitoJUnitRunner.class)
-public class WatcherTest {
-
-    @Test
-    public void testWatcherRun() {
-        // Création des objets simulés
-        CounterManager counterManager = mock(CounterManager.class);
-        RsLogEnum rsLogEnum = mock(RsLogEnum.class);
-
-        // Création de l'objet à tester
-        Watcher watcher = Watcher.getInstance();
-        watcher.period = 100L; // Période courte pour le test
-        watcher.task = Mockito.spy(watcher.new WatcherTask(counterManager, rsLogEnum));
-
-        // Exécution de la méthode à tester
-        watcher.task.run();
-
-        // Vérification que les méthodes attendues ont été appelées
-        verify(counterManager).getWatchingIPMessagesCunter();
-        verify(counterManager).getWatchingSwipessagesCounter();
-        verify(counterManager).getWatchingIPDSXMessagesCunter();
-        verify(rsLogEnum).ICO_MESSAGE.IP_DOWN.generateLog(anyString());
-        verify(rsLogEnum).ICO_MESSAGE.SWIP_DOWN.generateLog(anyString());
-        verify(rsLogEnum).ICO_MESSAGE.IPDSX_DOWN.generateLog(anyString());
-        verify(counterManager).resetwatching();
-    }
-}
-
