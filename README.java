@@ -124,4 +124,43 @@ class WatcherTest {
         verify(taskMock, times(1)).run();
     }
 }
+package org.example;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import java.util.Timer;
+import java.util.TimerTask;
+
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.class)
+public class WatcherTest {
+
+    @Test
+    public void testWatcherRun() {
+        // Création des objets simulés
+        CounterManager counterManager = mock(CounterManager.class);
+        RsLogEnum rsLogEnum = mock(RsLogEnum.class);
+
+        // Création de l'objet à tester
+        Watcher watcher = Watcher.getInstance();
+        watcher.period = 100L; // Période courte pour le test
+        watcher.task = Mockito.spy(watcher.new WatcherTask(counterManager, rsLogEnum));
+
+        // Exécution de la méthode à tester
+        watcher.task.run();
+
+        // Vérification que les méthodes attendues ont été appelées
+        verify(counterManager).getWatchingIPMessagesCunter();
+        verify(counterManager).getWatchingSwipessagesCounter();
+        verify(counterManager).getWatchingIPDSXMessagesCunter();
+        verify(rsLogEnum).ICO_MESSAGE.IP_DOWN.generateLog(anyString());
+        verify(rsLogEnum).ICO_MESSAGE.SWIP_DOWN.generateLog(anyString());
+        verify(rsLogEnum).ICO_MESSAGE.IPDSX_DOWN.generateLog(anyString());
+        verify(counterManager).resetwatching();
+    }
+}
 
