@@ -1,23 +1,51 @@
 import org.junit.Test;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
+
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.InvalidKeySpecException;
+
 import static org.junit.Assert.*;
 
-public class TestCopyToBytearray {
+public class TestGeneratePrivateKeyFromDER {
 
     @Test
-    public void testCopyToBytearray() throws IOException {
-        // Crée un tableau d'octets d'entrée à partir d'une chaîne de caractères
-        String inputString = "Hello, world!";
-        byte[] inputData = inputString.getBytes();
+    public void testGeneratePrivateKeyFromDER_GivenValidKeyBytes_WhenCalled_ThenReturnPrivateKey() throws InvalidKeySpecException, NoSuchAlgorithmException {
+        // GIVEN: des octets de clé valides
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        byte[] keyBytes = keyGen.generateKeyPair().getPrivate().getEncoded();
 
-        // Crée un InputStream à partir du tableau d'octets d'entrée
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(inputData);
+        // WHEN: on appelle la méthode generatePrivateKeyFromDER avec les octets de clé
+        RSAPrivateKey privateKey = generatePrivateKeyFromDER(keyBytes);
 
-        // Appelle la méthode copyToBytearray pour copier les données de l'InputStream
-        byte[] outputData = copyToBytearray(inputStream);
+        // THEN: la méthode doit retourner une clé privée RSA valide
+        assertNotNull(privateKey);
+        assertEquals("RSA", privateKey.getAlgorithm());
+        assertEquals(2048, privateKey.getModulus().bitLength());
+    }
 
-        // Vérifie que les données copiées sont égales à l'entrée d'origine
-        assertArrayEquals(inputData, outputData);
+    @Test
+    public void testGeneratePrivateKeyFromDER_GivenEmptyKeyBytes_WhenCalled_ThenGenerateNewPrivateKey() throws InvalidKeySpecException, NoSuchAlgorithmException {
+        // GIVEN: des octets de clé vides
+        byte[] keyBytes = new byte[0];
+
+        // WHEN: on appelle la méthode generatePrivateKeyFromDER avec les octets de clé vides
+        RSAPrivateKey privateKey = generatePrivateKeyFromDER(keyBytes);
+
+        // THEN: la méthode doit générer une nouvelle clé privée RSA valide
+        assertNotNull(privateKey);
+        assertEquals("RSA", privateKey.getAlgorithm());
+        assertEquals(2048, privateKey.getModulus().bitLength());
+    }
+
+    @Test(expected = InvalidKeySpecException.class)
+    public void testGeneratePrivateKeyFromDER_GivenInvalidKeyBytes_WhenCalled_ThenThrowInvalidKeySpecException() throws InvalidKeySpecException, NoSuchAlgorithmException {
+        // GIVEN: des octets de clé invalides
+        byte[] keyBytes = new byte[]{1, 2, 3, 4};
+
+        // WHEN: on appelle la méthode generatePrivateKeyFromDER avec les octets de clé invalides
+        generatePrivateKeyFromDER(keyBytes);
+
+        // THEN: la méthode doit lancer une exception InvalidKeySpecException
     }
 }
