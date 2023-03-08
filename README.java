@@ -1,25 +1,23 @@
 import org.junit.Test;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import static org.junit.Assert.*;
 
-public class SSLManagerTest {
+public class TestCopyToBytearray {
 
     @Test
-    public void testParseDERFromPEN() {
+    public void testCopyToBytearray() throws IOException {
+        // Crée un tableau d'octets d'entrée à partir d'une chaîne de caractères
+        String inputString = "Hello, world!";
+        byte[] inputData = inputString.getBytes();
 
-        SSLManager sslManager = new SSLManager();
+        // Crée un InputStream à partir du tableau d'octets d'entrée
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(inputData);
 
-        // Test with valid input
-        String beginDelimiter = "-----BEGIN CERTIFICATE-----";
-        String endDelimiter = "-----END CERTIFICATE-----";
-        String pem = beginDelimiter + "\n" + "BASE64_ENCODED_CERTIFICATE_DATA" + "\n" + endDelimiter;
-        byte[] expected = DatatypeConverter.parseBase64Binary("BASE64_ENCODED_CERTIFICATE_DATA");
-        byte[] actual = sslManager.parseDERFromPEN(pem.getBytes(), beginDelimiter, endDelimiter);
-        assertArrayEquals(expected, actual);
+        // Appelle la méthode copyToBytearray pour copier les données de l'InputStream
+        byte[] outputData = copyToBytearray(inputStream);
 
-        // Test with invalid input
-        pem = "INVALID_CERTIFICATE_DATA";
-        expected = new byte[0];
-        actual = sslManager.parseDERFromPEN(pem.getBytes(), beginDelimiter, endDelimiter);
-        assertArrayEquals(expected, actual);
+        // Vérifie que les données copiées sont égales à l'entrée d'origine
+        assertArrayEquals(inputData, outputData);
     }
 }
