@@ -76,3 +76,52 @@ class WatcherTest {
         assertTrue(isAlertIPDSXSent.get());
     }
 }
+
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.Timer;
+import java.util.TimerTask;
+
+import static org.mockito.Mockito.*;
+
+class WatcherTest {
+
+    @Test
+    void testWatcherTask() {
+        // GIVEN
+        Watcher watcher = Watcher.getInstance();
+        CounterManager.setWatchingIPMessagesCunter(-1);
+
+        // Créez un mock pour le TimerTask
+        TimerTask taskMock = mock(TimerTask.class);
+
+        // Simuler le temps qui s'écoule de 4 heures
+        long fourHoursInMillis = 4 * 60 * 60 * 1000L;
+        Mockito.doAnswer(invocation -> {
+            // Appelez la méthode run() du TimerTask simulée
+            taskMock.run();
+            return null;
+        }).when(taskMock).scheduledExecutionTime();
+
+        // Configurez le Timer pour utiliser le mock TimerTask
+        Timer timerMock = mock(Timer.class);
+        doReturn(timerMock).when(watcher).getTimer();
+        doReturn(taskMock).when(watcher).getTask();
+
+        // WHEN
+        watcher.start();
+
+        // Attendre que le TimerTask soit exécuté
+        try {
+            Thread.sleep(fourHoursInMillis);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // THEN
+        // Vérifiez que la méthode run() du TimerTask a été appelée
+        verify(taskMock, times(1)).run();
+    }
+}
+
