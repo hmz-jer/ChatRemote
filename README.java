@@ -1,70 +1,28 @@
-import org.junit.*;
-import org.mockito.*;
-
-import java.lang.reflect.Field;
-
+import org.apache.commons.csv.CSVRecord;
+import org.junit.Test;
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
-public class IcoStateChekerServiceTest {
-
-    private SocketController socketController;
-    private IcoStateChekerService service;
-
-    @Before
-    public void setup() {
-        socketController = mock(SocketController.class);
-        service = IcoStateChekerService.getInstance();
-        setPrivateField(service, "socketController", socketController);
-    }
+public class XPathConfigurationItemTest {
 
     @Test
-    public void testCheck_withSameIcoStatus_shouldNotGenerateLog() {
-        // Arrange
-        IcoStatus status = new IcoStatus("UP");
-        when(socketController.runningThreadStatus()).thenReturn(status);
-        String icoStatus = getPrivateField(service, "icoStatus");
-
-        // Act
-        service.check();
-
-        // Assert
-        assertEquals(icoStatus, getPrivateField(service, "icoStatus"));
-        verifyZeroInteractions(RsLogEnum.class);
+    public void testValidRecord() throws InvalidConfigurationException {
+        CSVRecord record = new CSVRecord(new String[] {"message_lso", "message_id", "debtor_agent"});
+        XPathConfigurationItem item = new XPathConfigurationItem(record);
+        assertEquals("message_lso", item.getMessagelso());
+        assertEquals("message_id", item.getMessageId());
+        assertEquals("debtor_agent", item.getDebtorAgent());
     }
 
-    @Test
-    public void testCheck_withDifferentIcoStatus_shouldGenerateLog() {
-        // Arrange
-        IcoStatus status = new IcoStatus("DEGRADED");
-        when(socketController.runningThreadStatus()).thenReturn(status);
-        String icoStatus = getPrivateField(service, "icoStatus");
-
-        // Act
-        service.check();
-
-        // Assert
-        assertNotEquals(icoStatus, getPrivateField(service, "icoStatus"));
-        verify(RsLogEnum.ICON_STATE_TRANSITION_DEGRADED).generateLog(icoStatus, "DEGRADED");
+    @Test(expected = IllegalArgumentException.class)
+    public void testIncompleteRecord() throws InvalidConfigurationException {
+        CSVRecord record = new CSVRecord(new String[] {"message_lso", "message_id"});
+        XPathConfigurationItem item = new XPathConfigurationItem(record);
     }
 
-    private void setPrivateField(Object target, String fieldName, Object value) {
-        try {
-            Field field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException("Unable to set private field " + fieldName + " in " + target.getClass().getName(), e);
-        }
+    @Test(expected = InvalidConfigurationException.class)
+    public void testEmptyFields() throws InvalidConfigurationException {
+        CSVRecord record = new CSVRecord(new String[] {"", "message_id", "debtor_agent"});
+        XPathConfigurationItem item = new XPathConfigurationItem(record);
     }
 
-    private Object getPrivateField(Object target, String fieldName) {
-        try {
-            Field field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return field.get(target);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException("Unable to get private field " + fieldName + " in " + target.getClass().getName(), e);
-        }
-    }
 }
