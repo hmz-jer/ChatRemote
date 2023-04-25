@@ -1,26 +1,29 @@
-European Payment Initiative (EPI) API Gateway
 
-Ce projet de API Gateway est destiné à supporter l'initiative européenne de paiement (EPI), une initiative visant à créer un système de paiement unifié en Europe. Cette API Gateway est construite en utilisant la plate-forme Axway.
-Getting Started
+Prérequis
+Avant de commencer à virtualiser les API Gateway d'Axway, vous devez vous assurer que vous avez installé les éléments suivants:
 
-Ces instructions vous aideront à démarrer le projet sur votre machine locale pour des fins de développement et de test.
-Prerequisites
+Axway API Gateway
+Axway Policy Studio
+Étape 1: Créer un projet
+La première étape consiste à créer un projet pour votre API virtuelle. Pour ce faire, ouvrez Axway Policy Studio et créez un nouveau projet en sélectionnant "File" -> "New" -> "Project".
 
-Avant de démarrer, vous devez installer les prérequis suivants :
+Étape 2: Ajouter une API virtuelle
+Une fois que vous avez créé votre projet, la prochaine étape consiste à ajouter une API virtuelle. Pour ce faire, cliquez avec le bouton droit de la souris sur le dossier "APIs" de votre projet et sélectionnez "New API".
 
-    Node.js version 10 ou supérieure
-    Axway API Gateway version 7.6.2 ou supérieure
-Installing
+Dans la fenêtre qui s'ouvre, entrez les détails de votre API, tels que son nom, sa description et sa version.
 
-    Clonez le repository sur votre machine locale :
+Étape 3: Configurer votre API virtuelle
+Une fois que vous avez créé votre API virtuelle, la prochaine étape consiste à la configurer. Pour ce faire, double-cliquez sur votre API virtuelle pour ouvrir sa configuration.
 
-L'API Gateway sera lancée sur le port 3000.
-Usage
+Dans la fenêtre de configuration, vous pouvez définir les paramètres tels que les routes, les points de terminaison, les politiques, etc.
 
-Cette API Gateway fournit un point d'entrée pour accéder à l'API EPI. Pour utiliser cette API Gateway, il suffit de faire une requête HTTP sur le port configuré avec le chemin d'accès à l'API EPI. Par exemple :
+Étape 4: Tester votre API virtuelle
+Une fois que vous avez configuré votre API virtuelle, vous pouvez la tester en utilisant la fonction de test intégrée d'Axway Policy Studio. Pour ce faire, cliquez sur le bouton "Test" dans la barre d'outils.
 
-bash
+Étape 5: Déployer votre API virtuelle
+Une fois que vous êtes satisfait du fonctionnement de votre API virtuelle, la dernière étape consiste à la déployer. Pour ce faire, sélectionnez votre API virtuelle dans la vue de projet, cliquez avec le bouton droit de la souris dessus et sélectionnez "Deploy".
 
-http://localhost:3000/v1/payments
+Dans la fenêtre qui s'ouvre, sélectionnez le serveur sur lequel vous souhaitez déployer votre API virtuelle et cliquez sur "OK".
 
-Cette requête sera transmise à l'API EPI à l'URL configurée dans la variable API_URL.
+Conclusion
+C'est tout ce qu'il y a à savoir pour virtualiser les API Gateway d'Axway en utilisant Axway Policy Studio. En suivant ces étapes, vous devriez être en mesure de créer et de déployer des API virtuelles de manière efficace.
