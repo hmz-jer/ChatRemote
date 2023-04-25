@@ -1,13 +1,4 @@
 
-
-Virtualisation d'API Axway
-
-
-hamza.jeridi@outlook.com
-Aide moi à créer un document tutoriel qui va aider les devloppeurs à virtauliser les api gateway de axeway 
-
-Bien sûr, je serais ravi de vous aider à créer un document tutoriel pour aider les développeurs à virtualiser les API Gateway d'Axway. Voici les étapes à suivre pour réaliser cela:
-
 Prérequis
 Avant de commencer à virtualiser les API Gateway d'Axway, vous devez vous assurer que vous avez installé les éléments suivants:
 
