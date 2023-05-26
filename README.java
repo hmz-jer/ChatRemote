@@ -1,34 +1,41 @@
+Title: Importing an OpenAPI File into Postman: A Step-by-Step Tutorial
 
-Cher(e) collègue,
+Introduction:
+Postman is a popular API development and testing tool that provides a user-friendly interface for interacting with APIs. In this tutorial, you will learn how to import an OpenAPI file into Postman, allowing you to explore and test the API endpoints defined in the file.
 
-Je suis heureux/se de vous annoncer que notre travail acharné a finalement porté ses fruits! Nous avons réussi à livrer vendredi, et je tiens à vous remercier pour votre engagement et votre dévouement envers ce projet.
+Prerequisites:
+- Postman installed on your computer. You can download it from the official Postman website (https://www.postman.com/downloads/).
+- An OpenAPI file (also known as Swagger file) in either JSON or YAML format.
 
-Je suis ravi(e) de partager avec vous les résultats de nos travaux :
+Step 1: Launch Postman
+Open the Postman application on your computer. If you haven't installed it yet, please download and install it before proceeding.
 
-Tout d'abord, nous avons testé avec succès la connexion entre le serveur de développement et IRIS en utilisant un ancien manuel d'utilisation d'IRIS. Nous avons réussi à comprendre les paramètres que IRIS prend en compte, et nous avons pu voir une réponse JSON à travers l'interface de contrôle de message d'IRIS.
+Step 2: Create a New Request
+Click on the "New" button in the top-left corner of the Postman window. This will open a new request tab.
 
-De plus, nous avons développé notre propre application de simulation qui remplace IRIS en environnement de développement, et qui nous renvoie également des réponses JSON. Cette application de simulation a été déployée sur le serveur de développement, et nous l'utilisons également pour générer le contrat d'interface, qui est techniquement le fichier swagger.
+Step 3: Import OpenAPI File
+In the new request tab, click on the "Import" button located below the request URL field. A pop-up window will appear.
 
-En ce qui concerne la passerelle API, nous avons récupéré la configuration de l'équipe Axway, et avons reconstruit la configuration de création de jetons afin de sécuriser nos API. Nous avons également créé nos propres API de backend au niveau de l'APIG, et développé nos politiques qui permettent de modifier les requêtes HTTP et d'ajouter les attributs et les modèles nécessaires pour la communication avec IRIS. Enfin, nous avons virtualisé nos API et les avons sécurisées à travers les jetons.
+Step 4: Select OpenAPI File
+In the pop-up window, click on the "Choose Files" button. Browse and select the OpenAPI file (JSON or YAML) you want to import into Postman.
 
-En parallèle de tout cela, nous avons travaillé sur des outils de test d'API qui facilitent le processus de création, de test et de documentation d'API. Nous avons utilisé Postman, un outil graphique qui permet d'envoyer des requêtes et de déboguer les réponses. Il permet également de gérer les autorisations d'accès, de créer des environnements de test et même de faire des tests de charge. Actuellement, nous travaillons sur Newman, un outil de ligne de commande qui permet d'exécuter des collections de tests API créées avec Postman. Newman nous aidera côté développement à automatiser les tests et les appels d'API, et peut également être utilisé côté build dans la chaîne CI/CD.
+Step 5: Confirm Import
+After selecting the file, click on the "Import" button in the pop-up window. Postman will begin processing the OpenAPI file.
 
-En résumé, Postman est utilisé pour créer, tester et documenter des API, tandis que Newman est utilisé pour automatiser les tests de ces API.
+Step 6: Review Imported Collection
+Once the import process is complete, you will see a new collection in the left sidebar of the Postman window. This collection represents the API endpoints defined in the OpenAPI file.
 
-Le build du projet EPI est terminé, et nous attendons le feu vert dès que le RPM sera sur le serveur APIM d'AWS. Encore une fois, je tiens à vous féliciter pour votre excellent travail et je suis ravi(e) de travailler avec une équipe aussi compétente et déterminée.
+Step 7: Explore API Endpoints
+Expand the imported collection in the left sidebar to view the list of API endpoints. Click on any endpoint to see its details, including the HTTP method, URL, headers, parameters, request body, and response examples.
 
-Cordialement,
+Step 8: Send a Request
+To test an API endpoint, click on the endpoint and then click on the "Send" button on the right side of the request details pane. Postman will send a request to the specified API endpoint and display the response.
 
+Step 9: Customize Requests
+You can customize the requests by modifying the request URL, headers, parameters, or request body. Postman provides an intuitive interface to make these changes easily.
 
-Je suis désolé(e) de ne pas avoir mentionné ce point crucial dans mon précédent discours. Nous avons également pris soin de documenter tous les travaux réalisés en environnement de développement, afin que nous puissions utiliser cette documentation pour préparer l'environnement AWS.
+Step 10: Save and Organize Requests
+If you want to save the imported collection or individual requests, click on the "Save" button in the top-right corner of the request details pane. You can organize your requests into folders for better management.
 
-Cette documentation détaillera toutes les étapes nécessaires pour déployer l'application avec succès sur AWS. Nous pourrons nous y référer pour configurer correctement les serveurs et les services nécessaires à la mise en production de notre application.
-
-Je tiens à souligner l'importance de cette documentation, car elle assurera une transition en douceur de l'environnement de développement à l'environnement de production. Nous pourrons ainsi garantir une stabilité et une fiabilité maximales de notre application.
-
-Encore une fois, merci à toute l'équipe pour votre travail acharné et votre dévouement envers ce projet. Nous sommes sur la bonne voie pour accomplir de grandes choses ensemble.
-
-Les "policies" de l'API Gateway d'Axway sont des ensembles de règles et d'actions prédéfini au niveau de l’APIG et ils vont étre excuté lorsque on recoit  des requêtes provenant du clientes.
-Ces politiques peuvent être utilisées pour effectuer une variété de tâches, telles que :
-    • L'authentification et l'autorisation des utilisateurs et des applications clientes
-    • La validation et la transformation des messages entrants et sortants
+Conclusion:
+In this tutorial, you have learned how to import an OpenAPI file into Postman and use it to explore and test API endpoints. Postman's import feature simplifies the process of working with OpenAPI specifications, allowing you to leverage the power of Postman for API development and testing.
