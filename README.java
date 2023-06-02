@@ -1,4 +1,4 @@
-import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +16,12 @@ public class PersonController {
     @PostMapping("/persons")
     public ResponseEntity<String> receiveJsonAndConvertToCsv(@RequestBody List<Person> persons) {
         try {
-            CsvSchema schema = CsvSchema.builder().setUseHeader(true).build();
-            ObjectReader oReader = new CsvMapper().readerFor(Person.class).with(schema);
-
+            CsvMapper csvMapper = new CsvMapper();
+            CsvSchema schema = csvMapper.schemaFor(Person.class).withHeader();
+            
             File csvFile = new File("persons.csv");
-            oReader.writeValues(csvFile).writeAll(persons).close();
-
+            csvMapper.writer(schema).writeValue(csvFile, persons);
+            
             return ResponseEntity.ok("File created successfully!");
 
         } catch (IOException e) {
