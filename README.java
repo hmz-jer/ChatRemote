@@ -1,31 +1,14 @@
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvSchema;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+// Import the RsLog class from your external jar
+@Grapes(
+    @Grab(group='com.yourcompany', module='your-module', version='1.0.0')
+)
+import com.yourcompany.yourmodule.RsLog
 
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
+// Initialize your RsLog instance (assuming it has a default constructor)
+RsLog rsLog = new RsLog()
 
-@RestController
-public class PersonController {
+// Create your input map
+Map<String, String> inputMap = ['key1': 'String1', 'key2': 'String2', 'key3': 'String3', 'key4': 'String4', 'key5': 'String5']
 
-    @PostMapping("/persons")
-    public ResponseEntity<String> receiveJsonAndConvertToCsv(@RequestBody List<Person> persons) {
-        try {
-            CsvMapper csvMapper = new CsvMapper();
-            CsvSchema schema = csvMapper.schemaFor(Person.class).withHeader();
-            
-            File csvFile = new File("persons.csv");
-            csvMapper.writer(schema).writeValue(csvFile, persons);
-            
-            return ResponseEntity.ok("File created successfully!");
-
-        } catch (IOException e) {
-            return ResponseEntity.badRequest().body("Error processing JSON to CSV: " + e.getMessage());
-        }
-    }
-}
+// Call the log() method
+rsLog.log(inputMap['key1'], inputMap['key2'], inputMap['key3'], inputMap['key4'], inputMap['key5'])
