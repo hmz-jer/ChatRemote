@@ -5,10 +5,10 @@
 import com.yourcompany.yourmodule.RsLog
 
 // Initialize your RsLog instance (assuming it has a default constructor)
-RsLog rsLog = new RsLog()
+def rsLog = new RsLog()
 
 // Create your input map
-Map<String, String> inputMap = ['key1': 'String1', 'key2': 'String2', 'key3': 'String3', 'key4': 'String4', 'key5': 'String5']
+def inputMap = ['key1': 'String1', 'key2': 'String2', 'key3': 'String3', 'key4': 'String4', 'key5': 'String5']
 
 // Call the log() method
 rsLog.log(inputMap['key1'], inputMap['key2'], inputMap['key3'], inputMap['key4'], inputMap['key5'])
