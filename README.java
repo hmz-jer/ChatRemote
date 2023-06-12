@@ -1,45 +1,47 @@
-!/bin/bash
+Pour générer une signature avec un format de sortie PEM, vous pouvez utiliser l'option -outform PEM dans la commande openssl smime -sign. De même, pour le chiffrement, vous pouvez utiliser l'option -outform DER. Voici comment vous pouvez le faire :
 
-# Définir le chemin du dossier contenant les fichiers CSV et les fichiers de sortie
-DOSSIER_CSV="/home/hmz/Documents/test"
-FICHIER_SORTIE_CONSUMER="/home/hmz/Documents/sortie_consumer.csv"
-FICHIER_SORTIE_PSP="/home/hmz/Documents/sortie_psp.csv"
+Sur le système A (envoyeur):
 
-# Concaténer les fichiers en fonction de leur type
-function concatener {
-    local premier=true
-    local nb_colonnes=0
-    local motif=$1
-    local fichier_sortie=$2
+    Créez une paire de clés et un certificat auto-signé :
 
-    for fichier in $(ls -v $DOSSIER_CSV/$motif)
-    do
-      if [ ! -f "$fichier" ] || [ ! -r "$fichier" ]; then
-          echo "Le fichier $fichier n'existe pas ou n'est pas lisible"
-          exit 1
-      fi
+    bash
 
-      if $premier; then
-          nb_colonnes=$(head -1 $fichier | awk -F';' '{print NF}')
-          head -1 $fichier > $fichier_sortie
-          tail -n +2 $fichier | grep . >> $fichier_sortie
-          premier=false
-      else
-          if [ $nb_colonnes -ne $(head -1 $fichier | awk -F';' '{print NF}') ]; then
-              echo "Les fichiers n'ont pas le même nombre de colonnes."
-              exit 1
-          fi
-          tail -n +2 $fichier | grep . >> $fichier_sortie
-      fi
-    done
-}
+openssl req -x509 -newkey rsa:4096 -keyout keyA.pem -out certA.pem -sha256 -days 365 -subj '/CN=SystemA' -nodes
 
-# Vérifier si le dossier existe et est lisible
-if [ ! -d "$DOSSIER_CSV" ] || [ ! -r "$DOSSIER_CSV" ]; then
-    echo "Le dossier $DOSSIER_CSV n'existe pas ou n'est pas lisible"
-    exit 1
-fi
+Signez le fichier en utilisant smime avec l'option -outform PEM :
 
-# Appeler la fonction de concaténation pour chaque type de fichier
-concatener "*client-info.csv" $FICHIER_SORTIE_CONSUMER
-concatener "*psp-list.csv" $FICHIER_SORTIE_PSP
+bash
+
+openssl smime -sign -binary -in sortie.csv -signer certA.pem -inkey keyA.pem -outform PEM -out sortie.pem
+
+Chiffrez le fichier signé avec la clé publique du système B (certB.pem, qui doit être fourni par le système B), en utilisant l'option -outform DER :
+
+bash
+
+    openssl smime -encrypt -binary -aes256 -outform DER certB.pem < sortie.pem > file.enc
+
+    Envoyez file.enc et certA.pem au système B.
+
+Sur le système B (récepteur):
+
+    Créez une paire de clés et un certificat auto-signé :
+
+    bash
+
+openssl req -x509 -newkey rsa:4096 -keyout keyB.pem -out certB.pem -sha256 -days 365 -subj '/CN=SystemB' -nodes
+
+Envoyez certB.pem au système A.
+
+Lorsque vous recevez file.enc et certA.pem du système A, déchiffrez le fichier avec votre clé privée :
+
+bash
+
+openssl smime -decrypt -in file.enc -recip certB.pem -inkey keyB.pem -out sortie.pem
+
+Vérifiez la signature avec la clé publique du système A (certA.pem) :
+
+bash
+
+    openssl smime -verify -in sortie.pem -signer certA.pem -CAfile certA.pem -out sortie.csv
+
+Ces commandes vous permettront de signer le fichier avec le format de sortie PEM, puis de le chiffrer en utilisant le format de sortie DER. Le fichier chiffré sera file.enc.
