@@ -1,47 +1,64 @@
-Pour générer une signature avec un format de sortie PEM, vous pouvez utiliser l'option -outform PEM dans la commande openssl smime -sign. De même, pour le chiffrement, vous pouvez utiliser l'option -outform DER. Voici comment vous pouvez le faire :
+#!/bin/bash
 
-Sur le système A (envoyeur):
+# Définir le chemin du dossier contenant les fichiers CSV et les fichiers de sortie
+DOSSIER_CSV_CONSUMER="/chemin/vers/le/dossier/consumer/csv"
+DOSSIER_CSV_PSP="/chemin/vers/le/dossier/psp/csv"
+FICHIER_SORTIE_CONSUMER="/chemin/vers/le/fichier/sortie_consumer.csv"
+FICHIER_SORTIE_PSP="/chemin/vers/le/fichier/sortie_psp.csv"
 
-    Créez une paire de clés et un certificat auto-signé :
+# Définir le chemin vers les clés et certificats
+CLE_PUBLIQUE="/chemin/vers/la/clé/publique"
+CLE_PRIVEE="/chemin/vers/la/clé/privée"
+CERTIFICAT="/chemin/vers/le/certificat"
 
-    bash
+# Concaténer les fichiers en fonction de leur type
+function concatener {
+    local premier=true
+    local nb_colonnes=0
+    local dossier=$1
+    local fichier_sortie=$2
 
-openssl req -x509 -newkey rsa:4096 -keyout keyA.pem -out certA.pem -sha256 -days 365 -subj '/CN=SystemA' -nodes
+    for fichier in $(ls -v $dossier/*.csv)
+    do
+      if [ ! -f "$fichier" ] || [ ! -r "$fichier" ]; then
+          echo "Le fichier $fichier n'existe pas ou n'est pas lisible"
+          exit 1
+      fi
 
-Signez le fichier en utilisant smime avec l'option -outform PEM :
+      if $premier; then
+          nb_colonnes=$(head -1 $fichier | awk -F';' '{print NF}')
+          head -1 $fichier > $fichier_sortie
+          tail -n +2 $fichier | grep . >> $fichier_sortie
+          premier=false
+      else
+          if [ $nb_colonnes -ne $(head -1 $fichier | awk -F';' '{print NF}') ]; then
+              echo "Les fichiers n'ont pas le même nombre de colonnes."
+              exit 1
+          fi
+          tail -n +2 $fichier | grep . >> $fichier_sortie
+      fi
+    done
 
-bash
+    # Signer le fichier en utilisant smime avec l'option -outform PEM
+    openssl smime -sign -binary -in $fichier_sortie -signer $CERTIFICAT -inkey $CLE_PRIVEE -outform PEM -out $fichier_sortie.pem
 
-openssl smime -sign -binary -in sortie.csv -signer certA.pem -inkey keyA.pem -outform PEM -out sortie.pem
+    # Chiffrer le fichier signé avec la clé publique du récepteur, en utilisant l'option -outform PEM
+    openssl smime -encrypt -binary -aes256 -outform PEM $CLE_PUBLIQUE < $fichier_sortie.pem > $fichier_sortie.enc
 
-Chiffrez le fichier signé avec la clé publique du système B (certB.pem, qui doit être fourni par le système B), en utilisant l'option -outform DER :
+    rm $fichier_sortie $fichier_sortie.pem
+}
 
-bash
+# Vérifier si le dossier existe et est lisible
+if [ ! -d "$DOSSIER_CSV_CONSUMER" ] || [ ! -r "$DOSSIER_CSV_CONSUMER" ]; then
+    echo "Le dossier $DOSSIER_CSV_CONSUMER n'existe pas ou n'est pas lisible"
+    exit 1
+fi
 
-    openssl smime -encrypt -binary -aes256 -outform DER certB.pem < sortie.pem > file.enc
+if [ ! -d "$DOSSIER_CSV_PSP" ] || [ ! -r "$DOSSIER_CSV_PSP" ]; then
+    echo "Le dossier $DOSSIER_CSV_PSP n'existe pas ou n'est pas lisible"
+    exit 1
+fi
 
-    Envoyez file.enc et certA.pem au système B.
-
-Sur le système B (récepteur):
-
-    Créez une paire de clés et un certificat auto-signé :
-
-    bash
-
-openssl req -x509 -newkey rsa:4096 -keyout keyB.pem -out certB.pem -sha256 -days 365 -subj '/CN=SystemB' -nodes
-
-Envoyez certB.pem au système A.
-
-Lorsque vous recevez file.enc et certA.pem du système A, déchiffrez le fichier avec votre clé privée :
-
-bash
-
-openssl smime -decrypt -in file.enc -recip certB.pem -inkey keyB.pem -out sortie.pem
-
-Vérifiez la signature avec la clé publique du système A (certA.pem) :
-
-bash
-
-    openssl smime -verify -in sortie.pem -signer certA.pem -CAfile certA.pem -out sortie.csv
-
-Ces commandes vous permettront de signer le fichier avec le format de sortie PEM, puis de le chiffrer en utilisant le format de sortie DER. Le fichier chiffré sera file.enc.
+# Appeler la fonction de concaténation pour chaque type de fichier
+concatener $DOSSIER_CSV_CONSUMER $FICHIER_SORTIE_CONSUMER
+concatener $DOSSIER_CSV_PSP $FICHIER_SORTIE_PSP
