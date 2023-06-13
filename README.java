@@ -1,24 +1,62 @@
-# CSV Concatenation Script
+#!/bin/bash
 
-This script concatenates all CSV files in a specified directory. It has been designed to work with two types of CSV files: 'consumer-info' and 'psp-list'.
+# Lire le fichier de configuration
+source /chemin/vers/config.cfg
 
-The script reads all CSV files in a directory, concatenates them while preserving the header of the first file, and outputs the concatenated content into a new file. It then signs and encrypts the file before moving it to the destination folder.
+# Vérifier si les variables nécessaires sont définies
+if [ -z "$DOSSIER_CSV_CONSUMER" ] || [ -z "$DOSSIER_CSV_PSP" ] || [ -z "$DOSSIER_DONE" ] || [ -z "$DOSSIER_ERREUR" ] || [ -z "$KEY_PEM" ] || [ -z "$CER_PEM" ]; then
+    echo "Les variables nécessaires ne sont pas définies dans le fichier de configuration."
+    exit 1
+fi
 
-## Configuration
+# Créer des fichiers de sortie temporaires
+FICHIER_SORTIE_CONSUMER=$(mktemp)
+FICHIER_SORTIE_PSP=$(mktemp)
 
-The script reads its configuration from a file named `config.cfg`. In this file, you must define the following variables:
+# Concaténer les fichiers en fonction de leur type
+function concatener {
+    local premier=true
+    local nb_colonnes=0
+    local dossier_csv=$1
+    local fichier_sortie=$2
+    local dossier_done=$3
+    local dossier_erreur=$4
+    local fichier_sortie_chiffre=$5
 
-- `DOSSIER_CSV_CONSUMER`: The path to the directory containing consumer CSV files.
-- `DOSSIER_CSV_PSP`: The path to the directory containing PSP CSV files.
-- `DOSSIER_DONE`: The path to the directory where the processed files will be moved to.
-- `DOSSIER_ERREUR`: The path to the directory where the files with errors will be moved to.
-- `KEY_PEM`: The path to your PEM private key.
-- `CER_PEM`: The path to your PEM public key.
+    for fichier in $(ls -v $dossier_csv/*.csv)
+    do
+        if [ ! -f "$fichier" ] || [ ! -r "$fichier" ]; then
+            echo "Erreur: Le fichier $fichier n'existe pas ou n'est pas lisible."
+            mv $fichier $dossier_erreur
+            continue
+        fi
 
-## Usage
+        if $premier; then
+            nb_colonnes=$(head -1 $fichier | awk -F';' '{print NF}')
+            head -1 $fichier > $fichier_sortie
+            tail -n +2 $fichier | grep . >> $fichier_sortie
+            premier=false
+        else
+            if [ $nb_colonnes -ne $(head -1 $fichier | awk -F';' '{print NF}') ]; then
+                echo "Erreur: Le fichier $fichier n'a pas le même nombre de colonnes."
+                mv $fichier $dossier_erreur
+                continue
+            fi
+            tail -n +2 $fichier | grep . >> $fichier_sortie
+        fi
 
-Run the script by typing `./csv_concatenation.sh` in your terminal.
+        mv $fichier $dossier_done
+    done
 
-## Error Handling
+    # Chiffrer et signer le fichier de sortie
+    openssl smime -sign -in $fichier_sortie -text -out $fichier_sortie.sig -signer $CER_PEM -inkey $KEY_PEM -outform PEM
+    openssl smime -encrypt -binary -outform DER -in $fichier_sortie.sig -out $fichier_sortie_chiffre $CER_PEM
 
-If there is an error with a file (for example, if it does not exist, is not readable, or does not have the same number of columns), the script will move this file to the error directory defined in the configuration file. The script also checks if the directories specified in the configuration file exist and are readable, and will terminate if this is not the case.
+    # Supprimer le fichier de sortie original et la signature
+    rm $fichier_sortie
+    rm $fichier_sortie.sig
+}
+
+# Appel de la fonction pour chaque type de fichier
+concatener $DOSSIER_CSV_CONSUMER $FICHIER_SORTIE_CONSUMER $DOSSIER_DONE $DOSSIER_ERREUR sortie_consumer.enc
+concatener $DOSSIER_CSV_PSP $FICHIER_SORTIE_PSP $DOSSIER_DONE $DOSSIER_ERREUR sortie_psp.enc
