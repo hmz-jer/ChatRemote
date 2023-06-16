@@ -1,4 +1,4 @@
-#!/bin/bash
+ #!/bin/bash
 
 # Lire le fichier de configuration
 source $(dirname "$0")/config.cfg
@@ -14,16 +14,15 @@ echo "Début du traitement des fichiers CSV..."
 # Fonction pour concaténer, signer et chiffrer les fichiers CSV
 function traiter {
     local dossier=$1
-    local motif=$2
     local prefix=$(basename $dossier)
     local date=$(date +%Y%m%d)
     local fichier_sortie="$DOSSIER_DONE/${prefix}_$date.csv"
     local premier=true
     local nb_colonnes=0
 
-    echo "Traitement des fichiers $motif dans le dossier $dossier..."
+    echo "Traitement des fichiers CSV dans le dossier $dossier..."
 
-    for fichier in $(ls -v $dossier/$motif 2> /dev/null)
+    for fichier in $(ls -v $dossier/*.csv 2> /dev/null)
     do
         if [ ! -f "$fichier" ] || [ ! -r "$fichier" ]; then
             echo "Erreur : Le fichier $fichier n'existe pas ou n'est pas lisible."
@@ -64,16 +63,4 @@ function traiter {
 
     openssl smime -sign -signer $CER_PEM -inkey $KEY_PEM -in $fichier_sortie -out $fichier_sortie.signed -outform PEM -nodetach
     openssl smime -encrypt -binary -aes-256-cbc -in $fichier_sortie.signed -out $fichier_sortie.enc -outform DER $CER_PEM
-    echo "Le fichier $fichier_sortie a été signé et chiffré."
-    rm $fichier_sortie $fichier_sortie.signed
-}
-
-# Parcourir tous les dossiers qui commencent par "referenciel" et traiter leurs fichiers CSV
-for dossier in $(dirname "$0")/referenciel*; do
-    if [ -d "$dossier" ]; then
-        traiter $dossier "*consumer-info.csv"
-        traiter $dossier "*psp-list.csv"
-    fi
-done
-
-echo "Fin du traitement des fichiers CSV."
+    echo "Le fichier $fichier_sort
