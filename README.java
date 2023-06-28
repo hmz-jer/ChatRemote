@@ -1,75 +1,43 @@
-#!/bin/bash
+Generating Collections for Newman:
 
-# Lire le fichier de configuration
-source $(dirname "$0")/config.cfg
+Newman is a command-line companion tool for Postman that allows you to run and automate collections of API requests. To generate collections for Newman from Postman, follow these steps:
 
-# Vérifier si les variables nécessaires sont définies
-if [ -z "$DOSSIER_DONE" ] || [ -z "$DOSSIER_ERREUR" ] || [ -z "$KEY_PEM" ] || [ -z "$CER_PEM" ]; then
-    echo "Erreur : Les variables nécessaires ne sont pas définies dans le fichier de configuration."
-    exit 1
-fi
+    Make sure you have created and saved all the requests you want to include in the collection within Postman.
 
-echo "Début du traitement des fichiers CSV..."
+    In the left sidebar of Postman, click on the "Collections" tab.
 
-# Fonction pour concaténer, signer et chiffrer les fichiers CSV
-function traiter {
-    local dossier=$1
-    local fichier_sortie="$DOSSIER_DONE/${dossier##*/}_$(date +%Y%m%d%H%M%S).csv"
-    local premier=true
-    local nb_colonnes=0
+    Click on the collection that contains the requests you want to export for Newman.
 
-    echo "Traitement des fichiers CSV dans le dossier $dossier..."
+    In the collection view, click on the "..." (three-dot) button located at the top-right corner of the collection details pane.
 
-    for fichier in $(ls -v $dossier/*.csv)
-    do
-        if [ ! -f "$fichier" ] || [ ! -r "$fichier" ]; then
-            echo "Erreur : Le fichier $fichier n'existe pas ou n'est pas lisible."
-            mv "$fichier" "$DOSSIER_ERREUR"
-            echo "Le fichier $fichier a été déplacé vers le dossier ERROR."
-            continue
-        fi
+    From the dropdown menu, select "Export".
 
-        echo "Concaténation du fichier $fichier..."
+    In the export options, choose the desired format for your Newman collection. You can export it as JSON or as a Postman Collection v2 format.
 
-        if $premier; then
-            nb_colonnes=$(head -1 $fichier | awk -F';' '{print NF}')
-            head -1 $fichier > $fichier_sortie
-            tail -n +2 $fichier | grep . >> $fichier_sortie
-            premier=false
-        else
-            if [ $nb_colonnes -ne $(head -1 $fichier | awk -F';' '{print NF}') ]; then
-                echo "Erreur : Les fichiers n'ont pas le même nombre de colonnes."
-                mv "$fichier" "$DOSSIER_ERREUR"
-                echo "Le fichier $fichier a été déplacé vers le dossier ERROR."
-                continue
-            fi
-            tail -n +2 $fichier | grep . >> $fichier_sortie
-        fi
+    Choose the location where you want to save the exported file and click "Save" or "Export" to complete the process.
 
-        echo "Le fichier $fichier a été traité et supprimé."
-        rm $fichier
-    done
+    You now have a collection file that can be used with Newman.
 
-    # Vérifier si le fichier de sortie est vide
-    if [ ! -s $fichier_sortie ]; then
-        echo "Le fichier $fichier_sortie est vide. Il ne sera pas signé ni chiffré."
-        rm $fichier_sortie
-        return
-    fi
+Running the Newman command-line tool:
 
-    echo "Signature et chiffrement du fichier $fichier_sortie..."
+To run the exported collection using Newman, follow these steps:
 
-    openssl smime -sign -signer $CER_PEM -inkey $KEY_PEM -in $fichier_sortie -out $fichier_sortie.signed -outform PEM -nodetach
-    openssl smime -encrypt -binary -aes-256-cbc -in $fichier_sortie.signed -out $fichier_sortie.enc -outform DER $CER_PEM
-    echo "Le fichier $fichier_sortie a été signé et chiffré."
-    rm $fichier_sortie $fichier_sortie.signed
-}
+    Ensure that you have Node.js installed on your machine. You can download it from the official Node.js website (https://nodejs.org).
 
-# Parcourir tous les dossiers qui commencent par "referenciel" et traiter leurs fichiers CSV
-for dossier in $(dirname "$0")/referenciel*; do
-    if [ -d "$dossier" ]; then
-        traiter $dossier
-    fi
-done
+    Open your command-line interface (e.g., Terminal, Command Prompt) and navigate to the directory where you saved the exported collection file.
 
-echo "Fin du traitement des fichiers CSV."
+    Install Newman globally by running the following command:
+
+npm install -g newman
+
+    Once Newman is installed, you can execute the collection using the following command:
+
+arduino
+
+newman run <collection-file-path>
+
+Replace <collection-file-path> with the actual path to your exported collection file.
+
+    Newman will execute the collection and display the results in the command-line interface, showing the status of each request along with any test results.
+
+By generating collections from Postman and using Newman, you can automate the execution of API requests, making it easier to incorporate API testing into your CI/CD pipelines or run automated tests.
