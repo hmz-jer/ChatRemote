@@ -1,83 +1,20 @@
-#!/bin/bash
 
-# Lire le fichier de configuration
-source /chemin/vers/config.cfg
+Objet : Avis de Vacances Prévues en Juillet
 
-# Vérifier si les variables nécessaires sont définies
-if [ -z "$DOSSIER_CSV_CONSUMER" ] || [ -z "$DOSSIER_CSV_PSP" ] || [ -z "$DOSSIER_DONE" ] || [ -z "$DOSSIER_ERREUR" ] || [ -z "$KEY_PEM" ] || [ -z "$CER_PEM" ]; then
-    echo "Erreur : Les variables nécessaires ne sont pas définies dans le fichier de configuration."
-    exit 1
-fi
+Cher/Chère [Nom du Destinataire],
 
-# Vérifier si les dossiers existent et sont lisibles
-for DOSSIER in $DOSSIER_CSV_CONSUMER $DOSSIER_CSV_PSP $DOSSIER_DONE $DOSSIER_ERREUR
-do
-    if [ ! -d "$DOSSIER" ] || [ ! -r "$DOSSIER" ]; then
-        echo "Erreur : Le dossier $DOSSIER n'existe pas ou n'est pas lisible."
-        exit 1
-    fi
-done
+J'espère que ce message vous trouve en bonne santé et de bonne humeur.
 
-echo "Début du traitement des fichiers CSV..."
+Je vous écris pour vous informer de mes plans de vacances prévus pour le mois de juillet. Je souhaite vous aviser à l'avance pour que nous puissions planifier en conséquence et assurer un fonctionnement fluide pendant mon absence.
 
-# Fonction pour concaténer, compresser, signer et chiffrer les fichiers CSV
-function traiter {
-    local dossier=$1
-    local motif=$2
-    local fichier_sortie="$DOSSIER_DONE/$(date +%Y%m%d%H%M%S).$motif"
-    local premier=true
-    local nb_colonnes=0
+Je prendrai une journée de congé le mercredi 5 juillet. De plus, je serai également en vacances pendant la semaine suivante, à partir du mercredi 12 juillet et jusqu'au lundi 17 juillet inclus.
 
-    echo "Traitement des fichiers $motif dans le dossier $dossier..."
+J'ai déjà informé l'équipe de mes plans de vacances afin qu'ils puissent s'organiser et prévoir en conséquence. Nous travaillons ensemble pour nous assurer que tous les projets et tâches en cours sont bien gérés pendant mon absence.
 
-    for fichier in $(ls -v $dossier/$motif)
-    do
-        if [ ! -f "$fichier" ] || [ ! -r "$fichier" ]; then
-            echo "Erreur : Le fichier $fichier n'existe pas ou n'est pas lisible."
-            mv "$fichier" "$DOSSIER_ERREUR"
-            echo "Le fichier $fichier a été déplacé vers le dossier ERROR."
-            continue
-        fi
+Je ferai de mon mieux pour anticiper toutes les tâches qui nécessitent mon attention avant mon départ. Si vous avez besoin que j'accomplisse des tâches spécifiques avant ces dates, n'hésitez pas à me les communiquer. J'encourage également tout échange nécessaire avant mon départ pour éviter tout désagrément.
 
-        echo "Concaténation du fichier $fichier..."
+Je m'efforcerai d'assurer une transition aussi douce que possible et de minimiser l'impact de mon absence sur notre équipe. Je suis convaincu que, grâce à notre collaboration et à notre soutien mutuels, nous pourrons surmonter cette période.
 
-        if $premier; then
-            nb_colonnes=$(head -1 $fichier | awk -F';' '{print NF}')
-            head -1 $fichier > $fichier_sortie
-            tail -n +2 $fichier | grep . >> $fichier_sortie
-            premier=false
-        else
-            if [ $nb_colonnes -ne $(head -1 $fichier | awk -F';' '{print NF}') ]; then
-                echo "Erreur : Les fichiers n'ont pas le même nombre de colonnes."
-                mv "$fichier" "$DOSSIER_ERREUR"
-                echo "Le fichier $fichier a été déplacé vers le dossier ERROR."
-                continue
-            fi
-            tail -n +2 $fichier | grep . >> $fichier_sortie
-        fi
+Je vous remercie de votre compréhension et de votre soutien. N'hésitez pas à me contacter si vous avez des questions ou des préoccupations concernant ma future absence.
 
-        echo "Le fichier $fichier a été traité et supprimé."
-        rm $fichier
-    done
-
-    # Vérifier si le fichier de sortie est vide
-    if [ ! -s $fichier_sortie ]; then
-        echo "Le fichier $fichier_sortie est vide. Il ne sera pas signé ni chiffré."
-        rm $fichier_sortie
-        return
-    fi
-
-    echo "Compression, signature et chiffrement du fichier $fichier_sortie..."
-
-    tar -czvf $fichier_sortie.tar.gz $fichier_sortie
-    openssl smime -sign -signer $CER_PEM -inkey $KEY_PEM -in $fichier_sortie.tar.gz -out $fichier_sortie.tar.gz.signed -outform PEM -nodetach
-    openssl smime -encrypt -binary -aes-256-cbc -in $fichier_sortie.tar.gz.signed -out $fichier_sortie.tar.gz.enc -outform DER $CER_PEM
-    echo "Le fichier $fichier_sortie a été compressé, signé et chiffré."
-    rm $fichier_sortie $fichier_sortie.tar.gz $fichier_sortie.tar.gz.signed
-}
-
-# Appeler la fonction de traitement pour chaque type de fichier
-traiter $DOSSIER_CSV_CONSUMER "*consumer-info.csv"
-traiter $DOSSIER_CSV_PSP "*psp-list.csv"
-
-echo "Fin du traitement des fichiers CSV."
+Cordialement,
