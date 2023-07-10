@@ -1,20 +1,40 @@
-
-Objet : Avis de Vacances Prévues en Juillet
-
-Cher/Chère [Nom du Destinataire],
-
-J'espère que ce message vous trouve en bonne santé et de bonne humeur.
-
-Je vous écris pour vous informer de mes plans de vacances prévus pour le mois de juillet. Je souhaite vous aviser à l'avance pour que nous puissions planifier en conséquence et assurer un fonctionnement fluide pendant mon absence.
-
-Je prendrai une journée de congé le mercredi 5 juillet. De plus, je serai également en vacances pendant la semaine suivante, à partir du mercredi 12 juillet et jusqu'au lundi 17 juillet inclus.
-
-J'ai déjà informé l'équipe de mes plans de vacances afin qu'ils puissent s'organiser et prévoir en conséquence. Nous travaillons ensemble pour nous assurer que tous les projets et tâches en cours sont bien gérés pendant mon absence.
-
-Je ferai de mon mieux pour anticiper toutes les tâches qui nécessitent mon attention avant mon départ. Si vous avez besoin que j'accomplisse des tâches spécifiques avant ces dates, n'hésitez pas à me les communiquer. J'encourage également tout échange nécessaire avant mon départ pour éviter tout désagrément.
-
-Je m'efforcerai d'assurer une transition aussi douce que possible et de minimiser l'impact de mon absence sur notre équipe. Je suis convaincu que, grâce à notre collaboration et à notre soutien mutuels, nous pourrons surmonter cette période.
-
-Je vous remercie de votre compréhension et de votre soutien. N'hésitez pas à me contacter si vous avez des questions ou des préoccupations concernant ma future absence.
-
-Cordialement,
+ "dependencies": {
+    "@angular/animations": "7.2.6",
+    "@angular/common": "7.2.6",
+    "@angular/compiler": "7.2.6",
+    "@angular/core": "7.2.6",
+    "@angular/forms": "7.2.6",
+    "@angular/platform-browser": "7.2.6",
+    "@angular/platform-browser-dynamic": "7.2.6",
+    "@angular/pwa": "0.12",
+    "@angular/router": "7.2.6",
+    "@angular/service-worker": "7.2.6",
+    "@patternfly/patternfly": "2.31.6",
+    "@rh-uxd/integration-core": "1.0.3",
+    "apicurio-data-models": "1.1.1",
+    "apicurio-design-studio": "0.2.46",
+    "apicurio-ts-core": "0.1.3",
+    "bootstrap": "3.4.1",
+    "brace": "^0.11.1",
+    "core-js": "2.6.5",
+    "js-yaml": "3.12.2",
+    "marked": "0.7.0",
+    "ngx-bootstrap": "3.2.0",
+    "ngx-clipboard": "11.1.9",
+    "patternfly": "3.59.1",
+    "pluralize": "7.0.0",
+    "rxjs": "6.4.0",
+    "zone.js": "0.8.29"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "0.13.3",
+    "@angular/cli": "7.3.3",
+    "@angular/compiler-cli": "7.2.6",
+    "@angular/language-service": "7.2.6",
+    "@types/js-yaml": "^3.12.5",
+    "@types/marked": "0.7.0",
+    "@types/node": "~8.9.4",
+    "protractor": "~5.4.0",
+    "ts-node": "~7.0.0",
+    "typescript": "3.2.4"
+  }
