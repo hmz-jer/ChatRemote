@@ -1,40 +1,16 @@
- "dependencies": {
-    "@angular/animations": "7.2.6",
-    "@angular/common": "7.2.6",
-    "@angular/compiler": "7.2.6",
-    "@angular/core": "7.2.6",
-    "@angular/forms": "7.2.6",
-    "@angular/platform-browser": "7.2.6",
-    "@angular/platform-browser-dynamic": "7.2.6",
-    "@angular/pwa": "0.12",
-    "@angular/router": "7.2.6",
-    "@angular/service-worker": "7.2.6",
-    "@patternfly/patternfly": "2.31.6",
-    "@rh-uxd/integration-core": "1.0.3",
-    "apicurio-data-models": "1.1.1",
-    "apicurio-design-studio": "0.2.46",
-    "apicurio-ts-core": "0.1.3",
-    "bootstrap": "3.4.1",
-    "brace": "^0.11.1",
-    "core-js": "2.6.5",
-    "js-yaml": "3.12.2",
-    "marked": "0.7.0",
-    "ngx-bootstrap": "3.2.0",
-    "ngx-clipboard": "11.1.9",
-    "patternfly": "3.59.1",
-    "pluralize": "7.0.0",
-    "rxjs": "6.4.0",
-    "zone.js": "0.8.29"
-  },
-  "devDependencies": {
-    "@angular-devkit/build-angular": "0.13.3",
-    "@angular/cli": "7.3.3",
-    "@angular/compiler-cli": "7.2.6",
-    "@angular/language-service": "7.2.6",
-    "@types/js-yaml": "^3.12.5",
-    "@types/marked": "0.7.0",
-    "@types/node": "~8.9.4",
-    "protractor": "~5.4.0",
-    "ts-node": "~7.0.0",
-    "typescript": "3.2.4"
-  }
+Objet : Explication du fonctionnement de l'application SOPA
+
+Bonjour,
+
+Je voulais vous donner une meilleure compréhension de l'application SOPA. D'abord, elle utilise Spring Actuator pour envoyer des rapports de statut de l'application, par exemple, le type 'UP' indique que l'application fonctionne correctement.
+
+Ce qui est important à noter, c'est que le statut de SOPA dépend d'ICON. SOPA fait un appel REST à ICON, en particulier à l'URL "/iris/status", pour déterminer son propre statut.
+
+SOPA sait à quelle instance de ICON se connecter en consultant un fichier de propriétés contenant une liste d'adresses IP. L'adresse spécifique à utiliser est spécifiée dans la propriété 'iris.server[0].port'.
+
+En fonction des résultats de l'appel à ICON, SOPA détermine son propre rapport de statut. Si elle n'obtient aucune erreur ('KO') et aucune exception, elle renvoie 'OK'. Si tous les résultats sont en erreur, elle renvoie 'KO'.
+
+Dans les autres cas, SOPA fait la somme des appels et calcule le pourcentage d'échecs. Ce pourcentage donne une indication sur l'état de santé global de l'application.
+
+Si vous avez des questions ou besoin de plus de détails, n'hésitez pas à me le faire savoir.
+
