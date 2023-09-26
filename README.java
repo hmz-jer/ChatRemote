@@ -1,34 +1,60 @@
-D'accord. Pour vérifier le statut d'un broker Kafka en utilisant l'API Admin de Kafka, voici un exemple simple en Java :Ajoutez les dépendances nécessaires à votre fichier pom.xml (si vous utilisez Maven):<dependency>
-    <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-clients</artifactId>
-    <version>2.8.0</version> <!-- Utilisez la version appropriée -->
-</dependency>Exemple de code pour vérifier le statut de Kafka avec l'API Admin:import org.apache.kafka.clients.admin.AdminClient;
+ Bien sûr, je vais adapter le test unitaire en conséquence.
+
+Avec le changement, le test se focalisera sur la méthode `checkKafkaStatus` en lui fournissant un mock de `Properties` et vérifiera si elle retourne le statut approprié.
+
+Voici comment vous pourriez adapter le test unitaire:
+
+```java
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
+import org.junit.Test;
 
 import java.util.Properties;
 
-public class KafkaStatusChecker {
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
 
-    private static final String BOOTSTRAP_SERVERS = "localhost:9092"; // Remplacez par l'adresse de votre broker
+public class KafkaStatusCheckerTest {
 
-    public static void main(String[] args) {
-        Properties properties = new Properties();
-        properties.put("bootstrap.servers", BOOTSTRAP_SERVERS);
+    @Test
+    public void testKafkaIsUp() throws Exception {
+        // Mocking
+        Properties mockProperties = mock(Properties.class);
+        AdminClient adminClient = mock(AdminClient.class);
+        DescribeClusterResult clusterDescription = mock(DescribeClusterResult.class);
+        KafkaFuture<Node> futureNode = mock(KafkaFuture.class);
+        Node mockNode = new Node(1, "localhost", 9092); // Mock Node
 
-        try (AdminClient adminClient = AdminClient.create(properties)) {
-            DescribeClusterResult clusterDescription = adminClient.describeCluster();
-            KafkaFuture<Integer> controllerFuture = clusterDescription.controller();
+        when(AdminClient.create(mockProperties)).thenReturn(adminClient);
+        when(adminClient.describeCluster()).thenReturn(clusterDescription);
+        when(clusterDescription.controller()).thenReturn(futureNode);
+        when(futureNode.get()).thenReturn(mockNode);
 
-            // Si on peut récupérer le broker controller, alors Kafka est up
-            if (controllerFuture.get() != null) {
-                System.out.println("Kafka est up");
-            } else {
-                System.out.println("Kafka est down");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("Erreur lors de la vérification du statut de Kafka");
-        }
+        KafkaStatus status = KafkaStatusChecker.checkKafkaStatus(mockProperties);
+
+        assertEquals(KafkaStatus.OK, status);
     }
-}Remarque : Ce code vérifie la disponibilité du broker "controller" de Kafka. Si le "controller" est disponible, on considère que Kafka est opérationnel. Si vous avez un cluster avec plusieurs brokers, assurez-vous de lister tous les "bootstrap.servers".Ce code est un exemple de base pour vérifier le statut de Kafka. Dans une application réelle, vous voudrez peut-être ajouter plus de gestion d'erreurs et de vérifications.
+
+    @Test
+    public void testKafkaIsDown() throws Exception {
+        // Mocking
+        Properties mockProperties = mock(Properties.class);
+        AdminClient adminClient = mock(AdminClient.class);
+        DescribeClusterResult clusterDescription = mock(DescribeClusterResult.class);
+        KafkaFuture<Node> futureNode = mock(KafkaFuture.class);
+
+        when(AdminClient.create(mockProperties)).thenReturn(adminClient);
+        when(adminClient.describeCluster()).thenReturn(clusterDescription);
+        when(clusterDescription.controller()).thenReturn(futureNode);
+        when(futureNode.get()).thenReturn(null);  // Simuler que Kafka est down
+
+        KafkaStatus status = KafkaStatusChecker.checkKafkaStatus(mockProperties);
+
+        assertEquals(KafkaStatus.DOWN, status);
+    }
+}
+```
+
+Dans ces tests, nous mockons la création de `AdminClient`, les appels à `describeCluster()`, et le résultat du futur. Ensuite, nous appelons la méthode `checkKafkaStatus` avec les propriétés mockées et vérifions si elle retourne le bon statut. Il y a deux tests: un pour vérifier lorsque Kafka est "up" et un autre pour vérifier lorsqu'il est "down".
