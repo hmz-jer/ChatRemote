@@ -1,60 +1,59 @@
- Bien sûr, je vais adapter le test unitaire en conséquence.
+  Je comprends, mocker la méthode statique `AdminClient.create` pose un problème car Mockito, dans sa version de base, ne supporte pas le mock des méthodes statiques.
 
-Avec le changement, le test se focalisera sur la méthode `checkKafkaStatus` en lui fournissant un mock de `Properties` et vérifiera si elle retourne le statut approprié.
+Pour résoudre ce problème, il y a plusieurs approches possibles :
 
-Voici comment vous pourriez adapter le test unitaire:
+1. **Refactoriser le code pour faciliter les tests** :
+   Vous pouvez créer une factory ou une interface pour encapsuler la création de l'`AdminClient`, ce qui vous permettrait de la mocker facilement dans vos tests. C'est une bonne pratique pour rendre le code plus testable.
+
+2. **Utiliser PowerMock avec Mockito** :
+   PowerMock est une extension de Mockito qui permet de mocker les méthodes statiques. Cependant, l'utilisation de PowerMock peut compliquer la configuration de vos tests et n'est généralement pas recommandée sauf si c'est vraiment nécessaire.
+
+3. **Injecter l'AdminClient comme dépendance** :
+   Au lieu de créer l'`AdminClient` à l'intérieur de la méthode, passez-le en tant que paramètre. Cela rend la méthode plus facile à tester car vous pouvez injecter directement l'`AdminClient` mocké.
+
+Je vais vous montrer comment mettre en œuvre la 3ème approche (Injection de dépendance) :
+
+**Modification du KafkaStatusChecker** :
 
 ```java
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DescribeClusterResult;
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.Node;
-import org.junit.Test;
+public class KafkaStatusChecker {
 
-import java.util.Properties;
+    public static KafkaStatus checkKafkaStatus(AdminClient adminClient) {
+        try {
+            DescribeClusterResult clusterDescription = adminClient.describeCluster();
+            KafkaFuture<Node> controllerFuture = clusterDescription.controller();
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-
-public class KafkaStatusCheckerTest {
-
-    @Test
-    public void testKafkaIsUp() throws Exception {
-        // Mocking
-        Properties mockProperties = mock(Properties.class);
-        AdminClient adminClient = mock(AdminClient.class);
-        DescribeClusterResult clusterDescription = mock(DescribeClusterResult.class);
-        KafkaFuture<Node> futureNode = mock(KafkaFuture.class);
-        Node mockNode = new Node(1, "localhost", 9092); // Mock Node
-
-        when(AdminClient.create(mockProperties)).thenReturn(adminClient);
-        when(adminClient.describeCluster()).thenReturn(clusterDescription);
-        when(clusterDescription.controller()).thenReturn(futureNode);
-        when(futureNode.get()).thenReturn(mockNode);
-
-        KafkaStatus status = KafkaStatusChecker.checkKafkaStatus(mockProperties);
-
-        assertEquals(KafkaStatus.OK, status);
-    }
-
-    @Test
-    public void testKafkaIsDown() throws Exception {
-        // Mocking
-        Properties mockProperties = mock(Properties.class);
-        AdminClient adminClient = mock(AdminClient.class);
-        DescribeClusterResult clusterDescription = mock(DescribeClusterResult.class);
-        KafkaFuture<Node> futureNode = mock(KafkaFuture.class);
-
-        when(AdminClient.create(mockProperties)).thenReturn(adminClient);
-        when(adminClient.describeCluster()).thenReturn(clusterDescription);
-        when(clusterDescription.controller()).thenReturn(futureNode);
-        when(futureNode.get()).thenReturn(null);  // Simuler que Kafka est down
-
-        KafkaStatus status = KafkaStatusChecker.checkKafkaStatus(mockProperties);
-
-        assertEquals(KafkaStatus.DOWN, status);
+            if (controllerFuture.get() != null) {
+                return KafkaStatus.OK;
+            } else {
+                return KafkaStatus.DOWN;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return KafkaStatus.DOWN;
+        }
     }
 }
 ```
 
-Dans ces tests, nous mockons la création de `AdminClient`, les appels à `describeCluster()`, et le résultat du futur. Ensuite, nous appelons la méthode `checkKafkaStatus` avec les propriétés mockées et vérifions si elle retourne le bon statut. Il y a deux tests: un pour vérifier lorsque Kafka est "up" et un autre pour vérifier lorsqu'il est "down".
+**Modification du test** :
+
+```java
+@Test
+public void testKafkaIsUp() throws Exception {
+    // Mocking
+    AdminClient adminClient = mock(AdminClient.class);
+    DescribeClusterResult clusterDescription = mock(DescribeClusterResult.class);
+    KafkaFuture<Node> futureNode = mock(KafkaFuture.class);
+    Node mockNode = new Node(1, "localhost", 9092);
+
+    when(adminClient.describeCluster()).thenReturn(clusterDescription);
+    when(clusterDescription.controller()).thenReturn(futureNode);
+    when(futureNode.get()).thenReturn(mockNode);
+
+    KafkaStatus status = KafkaStatusChecker.checkKafkaStatus(adminClient);
+    assertEquals(KafkaStatus.OK, status);
+}
+```
+
+En passant l'`AdminClient` comme paramètre à `checkKafkaStatus`, nous évitons la nécessité de mocker la méthode statique et rendons notre code plus testable.
