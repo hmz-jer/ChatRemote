@@ -1,59 +1,31 @@
-  Je comprends, mocker la méthode statique `AdminClient.create` pose un problème car Mockito, dans sa version de base, ne supporte pas le mock des méthodes statiques.
+Bien sûr. Voici un exemple de mail d'estimation pour cinq tâches dont vous m'avez fourni le chiffrage :
 
-Pour résoudre ce problème, il y a plusieurs approches possibles :
+---
 
-1. **Refactoriser le code pour faciliter les tests** :
-   Vous pouvez créer une factory ou une interface pour encapsuler la création de l'`AdminClient`, ce qui vous permettrait de la mocker facilement dans vos tests. C'est une bonne pratique pour rendre le code plus testable.
+Objet : Estimation des tâches - Projet X
 
-2. **Utiliser PowerMock avec Mockito** :
-   PowerMock est une extension de Mockito qui permet de mocker les méthodes statiques. Cependant, l'utilisation de PowerMock peut compliquer la configuration de vos tests et n'est généralement pas recommandée sauf si c'est vraiment nécessaire.
+Bonjour [Nom du destinataire],
 
-3. **Injecter l'AdminClient comme dépendance** :
-   Au lieu de créer l'`AdminClient` à l'intérieur de la méthode, passez-le en tant que paramètre. Cela rend la méthode plus facile à tester car vous pouvez injecter directement l'`AdminClient` mocké.
+Suite à notre discussion, voici l'estimation chiffrée des cinq tâches dont nous avons discuté :
 
-Je vais vous montrer comment mettre en œuvre la 3ème approche (Injection de dépendance) :
+1. **Tâche A** : 10 heures
+2. **Tâche B** : 5 heures
+3. **Tâche C** : 15 heures
+4. **Tâche D** : 7 heures
+5. **Tâche E** : 3 heures
 
-**Modification du KafkaStatusChecker** :
+**Total** : 40 heures
 
-```java
-public class KafkaStatusChecker {
+Ce chiffrage a été établi en prenant en compte nos précédentes expériences et les spécificités que vous m'avez communiquées. Si des éléments devaient évoluer ou si des imprévus survenaient, je vous tiendrais bien sûr informé(e) pour réajuster ces estimations si nécessaire.
 
-    public static KafkaStatus checkKafkaStatus(AdminClient adminClient) {
-        try {
-            DescribeClusterResult clusterDescription = adminClient.describeCluster();
-            KafkaFuture<Node> controllerFuture = clusterDescription.controller();
+Merci de me confirmer si ces estimations vous conviennent ou si vous souhaitez apporter des modifications.
 
-            if (controllerFuture.get() != null) {
-                return KafkaStatus.OK;
-            } else {
-                return KafkaStatus.DOWN;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            return KafkaStatus.DOWN;
-        }
-    }
-}
-```
+Je reste à votre disposition pour toute question ou clarification.
 
-**Modification du test** :
+Bien cordialement,
 
-```java
-@Test
-public void testKafkaIsUp() throws Exception {
-    // Mocking
-    AdminClient adminClient = mock(AdminClient.class);
-    DescribeClusterResult clusterDescription = mock(DescribeClusterResult.class);
-    KafkaFuture<Node> futureNode = mock(KafkaFuture.class);
-    Node mockNode = new Node(1, "localhost", 9092);
+[Votre nom]
 
-    when(adminClient.describeCluster()).thenReturn(clusterDescription);
-    when(clusterDescription.controller()).thenReturn(futureNode);
-    when(futureNode.get()).thenReturn(mockNode);
+---
 
-    KafkaStatus status = KafkaStatusChecker.checkKafkaStatus(adminClient);
-    assertEquals(KafkaStatus.OK, status);
-}
-```
-
-En passant l'`AdminClient` comme paramètre à `checkKafkaStatus`, nous évitons la nécessité de mocker la méthode statique et rendons notre code plus testable.
+Notez que ce n'est qu'un exemple générique. Vous devriez adapter le contenu en fonction des détails spécifiques de votre projet et des informations fournies par votre destinataire.
