@@ -1,38 +1,19 @@
-plugins {
-	id 'java'
-	id 'org.springframework.boot' version '2.7.16'
-	id 'io.spring.dependency-management' version '1.0.15.RELEASE'
-}
+    Conception (3-5 jours) :
+        Conception architecturale du batch Java
+        Définition de l'approche de gestion de transactions et de rollback
+        Planification de la mise en place de l'API HTTP
 
-group = 'com.exampleTSP'
-version = '0.0.1-SNAPSHOT'
+    Développement du Batch Java et de l'API HTTP (30-45 jours) :
+        Écriture du code source du batch, y compris la lecture des fichiers tar
+        Gestion de l'extraction des données depuis les fichiers
+        Connexion et interaction avec Cassandra
+        Implémentation de la logique de transaction et de rollback en cas d'échec
+        Configuration d'un serveur HTTP (par exemple, Spring Boot avec Tomcat)
+        Définition des points de terminaison (endpoints) de l'API
+        Implémentation des contrôleurs pour gérer les requêtes HTTP
+        Gestion des paramètres d'entrée et de sortie de l'API
 
-java {
-	sourceCompatibility = '1.8'
-}
-
-configurations {
-	compileOnly {
-		extendsFrom annotationProcessor
-	}
-}
-
-repositories {
-	mavenCentral()
-}
-
-dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-batch'
-	implementation 'org.springframework.boot:spring-boot-starter-data-cassandra'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	compileOnly 'org.projectlombok:lombok'
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	annotationProcessor 'org.projectlombok:lombok'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.batch:spring-batch-test'
-	implementation 'org.springdoc:springdoc-openapi-ui:1.7.0'
-}
-
-tasks.named('test') {
-	useJUnitPlatform()
-}
+    Tests (5-7 jours) :
+        Élaboration de scénarios de test pour les fonctionnalités de base et l'API HTTP
+        Tests unitaires pour chaque composant du batch et de l'API
+        Tests de base pour s'assurer du bon fonctionnement
