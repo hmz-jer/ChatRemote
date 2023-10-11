@@ -1,19 +1,21 @@
-    Conception (3-5 jours) :
-        Conception architecturale du batch Java
-        Définition de l'approche de gestion de transactions et de rollback
-        Planification de la mise en place de l'API HTTP
+    Objet : Demande de congés et proposition d'organisation
 
-    Développement du Batch Java et de l'API HTTP (30-45 jours) :
-        Écriture du code source du batch, y compris la lecture des fichiers tar
-        Gestion de l'extraction des données depuis les fichiers
-        Connexion et interaction avec Cassandra
-        Implémentation de la logique de transaction et de rollback en cas d'échec
-        Configuration d'un serveur HTTP (par exemple, Spring Boot avec Tomcat)
-        Définition des points de terminaison (endpoints) de l'API
-        Implémentation des contrôleurs pour gérer les requêtes HTTP
-        Gestion des paramètres d'entrée et de sortie de l'API
+Bonjour [Nom du chef],
 
-    Tests (5-7 jours) :
-        Élaboration de scénarios de test pour les fonctionnalités de base et l'API HTTP
-        Tests unitaires pour chaque composant du batch et de l'API
-        Tests de base pour s'assurer du bon fonctionnement
+J’espère que tu vas bien. J'aimerais discuter avec toi de ma planification de congés pour le reste de l’année 2023.
+
+J’ai calculé et, en prenant en compte mes jours travaillés jusqu’à maintenant, je vais atteindre 213 jours de travail cette année si je m'organise comme suit :
+
+- Prendre deux jours en novembre, soit le 11 et le 13.
+- Prendre le reste de mes congés du 13 décembre jusqu'à la fin de l’année.
+
+Cela me permet de contribuer au mieux aux projets en cours tout en respectant le calendrier prévu.
+
+Je suis convaincu que nous pouvons assurer une transition douce et efficace pour mon absence avec une planification adéquate. Si tu es d’accord avec cette organisation, je m’assurerai que toutes mes responsabilités soient bien gérées et transmises à l’équipe pendant mon absence.
+
+Je reste bien sûr disponible pour en discuter plus amplement si tu souhaites ajuster quelque chose.
+
+Je te remercie pour ta compréhension et j’attends ton retour.
+
+Cordialement,
+[Ton prénom]
