@@ -1,4 +1,4 @@
-D'accord, voici une modification de votre e-mail avec l'ajout de cette information :
+Bien entendu. Voici une version mise à jour de votre e-mail avec l'ajout de cette section :
 
 ---
 
@@ -22,6 +22,16 @@ Ce test a été conçu pour simuler des échanges de messages entre le client et
 
 Ce test simule une notification initiée par le serveur et traitée par le client. Les commandes utilisées incluent `server-sign-message`, `server-encrypt-message`, `client-decrypt-message`, et `client-check-and-get-payload`. [Insérer l'impression d'écran correspondante ici.]
 
+**3. Vérification des Certificats**
+
+Nous avons également procédé à la vérification de la validité des certificats suivants :
+- `certificat_jws`
+- `certificate_jwe`
+- `server/keystoreACRoot.jks`
+- `client/keystoreACRoot.jks`
+
+Des impressions d'écran illustrant les résultats et les détails de ces vérifications sont jointes. [Insérer les impressions d'écran correspondantes ici.]
+
 **Remarques :** Lors de nos tests, nous avons observé que, bien que les messages soient correctement déchiffrés, les espaces présents dans les messages d'origine sont supprimés lors du processus de déchiffrement. C'est un aspect que nous devrions examiner de plus près.
 
 Je vous invite à examiner les détails des tests et les impressions d'écran jointes. Vos commentaires et retours seront grandement appréciés. Si des ajustements ou des tests supplémentaires sont nécessaires, n'hésitez pas à me le faire savoir.
@@ -34,4 +44,4 @@ Cordialement,
 
 ---
 
-Vous pouvez désormais ajouter les impressions d'écran et envoyer cet e-mail à l'aide de votre client de messagerie préféré. Si vous avez d'autres ajustements ou questions, n'hésitez pas à me le faire savoir !
+Avec cet ajout, le rapport est encore plus complet. Vous pouvez insérer vos impressions d'écran où indiqué et envoyer l'e-mail via votre client de messagerie. Si vous avez besoin d'autres modifications ou questions, n'hésitez pas à m'en faire part !
