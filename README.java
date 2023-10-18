@@ -1,19 +1,26 @@
-public Availablestatus gotavallablestatus (Stoppable. Type type)
+    private YourClassName yourClassInstance;
 
-AvailableStatus clientstatus = null;
+    @Before
+    public void setup() {
+        yourClassInstance = Mockito.spy(new YourClassName());
+    }
 
-Supplierstream<toppable>> streamSupplier()-> this.getBunningThreads().stream(), Eltortstoppable> typu.equals(stoppable.getType()))) Map<AvailableStatus, Long> client@tatusCount = atroan applier.get().collect (Calleats.groupingly troppablelistatus, Collectors.cousting 0)) string napaafting clientstatumCount.keyset().stream().map(key-> key+client.StatusCount.get(key)).collect (Collectors.joining("
+    @Test
+    public void testGetAvailableStatus() {
+        // Mock getRunningThreads()
+        Stoppable mockStoppable1 = Mockito.mock(Stoppable.class);
+        Stoppable mockStoppable2 = Mockito.mock(Stoppable.class);
+        List<Stoppable> mockList = Arrays.asList(mockStoppable1, mockStoppable2);
 
-Long countRunning allentstatusCount.get(Avaliablestatus.STARTED) 7
+        when(mockStoppable1.getType()).thenReturn(Stoppable.Type.YOUR_TYPE);
+        when(mockStoppable1.getStatus()).thenReturn(AvailableStatus.STARTED);
 
-LE(countRunning fe null & countRunning-Intvalue() & countRunning, intValue() stromupplier.get(). (1) ( client status AvailableStatus.DEGRADED
+        when(mockStoppable2.getType()).thenReturn(Stoppable.Type.YOUR_TYPE);
+        when(mockStoppable2.getStatus()).thenReturn(AvailableStatus.STARTED);
 
-else if (countRunning null 11 couns Running.intValue())
+        when(yourClassInstance.getRunningThreads()).thenReturn(mockList);
 
-clientstaton Availabletus.STOPPED
-
-) else ( clientStatus = Avaliablestatur.STARTED
-
-LOGGER, trace()-> (9 mapasstring, clientstatus.name());
-
-return client patungs
+        // Test
+        AvailableStatus result = yourClassInstance.getAvailableStatus(Stoppable.Type.YOUR_TYPE);
+        assertEquals(AvailableStatus.STARTED, result);
+    }
