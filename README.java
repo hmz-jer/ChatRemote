@@ -1,4 +1,6 @@
-    D'accord, voici un exemple de script shell que vous pouvez utiliser :
+    D'accord, je vais ajuster le script en conséquence. Si l'utilisateur entre `1` ou `start`, le script redémarrera l'application, et s'il entre `0` ou `stop`, il arrêtera l'application.
+
+Voici le script modifié:
 
 ```bash
 #!/bin/bash
@@ -6,7 +8,7 @@
 # Nom du script : nomfichier.sh
 
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 setadminstatus {0|1}"
+    echo "Usage: $0 setadminstatus {0|stop|1|start}"
     exit 1
 fi
 
@@ -19,16 +21,16 @@ if [ "$command" != "setadminstatus" ]; then
 fi
 
 case $value in
-    0)
+    0 | stop)
         echo "Arrêt de l'application..."
         # Commande pour arrêter l'application ici
         ;;
-    1)
-        echo "Redémarrage de l'application..."
-        # Commande pour redémarrer l'application ici
+    1 | start)
+        echo "Démarrage de l'application..."
+        # Commande pour démarrer l'application ici
         ;;
     *)
-        echo "Valeur non reconnue. Utilisez 0 pour arrêter et 1 pour redémarrer."
+        echo "Valeur non reconnue. Utilisez 0 ou stop pour arrêter et 1 ou start pour démarrer."
         exit 3
         ;;
 esac
@@ -36,8 +38,4 @@ esac
 exit 0
 ```
 
-Remarques:
-
-1. Vous devez remplacer les commentaires `# Commande pour arrêter l'application ici` et `# Commande pour redémarrer l'application ici` par les commandes réelles pour arrêter et redémarrer votre application.
-2. Assurez-vous de donner les permissions d'exécution à ce script après l'avoir créé. Vous pouvez le faire avec la commande : `chmod +x nomfichier.sh`.
-3. Pour exécuter le script : `./nomfichier.sh setadminstatus 0` pour arrêter et `./nomfichier.sh setadminstatus 1` pour redémarrer.
+Comme mentionné précédemment, n'oubliez pas de remplacer les commentaires par les commandes réelles pour démarrer et arrêter votre application. Donnez également les permissions d'exécution avec `chmod +x nomfichier.sh`.
