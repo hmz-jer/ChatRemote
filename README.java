@@ -1,20 +1,59 @@
-Bonjour à tous,
+package com.hmz.configInjecteur.service;
 
-Je voulais vous faire un récapitulatif rapide de notre daily meeting de ce matin :
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.DescribeClusterOptions;
+import org.apache.kafka.clients.admin.DescribeClusterResult;
+import org.apache.kafka.common.Node;
 
-    EPI :
-        Les fichiers de configuration de la partie IDM ont été mis à jour. L'équipe BUILD a effectué les tests nécessaires et tout fonctionne correctement. Le problème rencontré précédemment a été corrigé et un email à ce sujet a déjà été envoyé pour vous en informer.
+import java.util.Collection;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
-    SCFP :
-        Nous travaillons aujourd'hui sur la QC 26852. Toute collaboration ou information supplémentaire à ce sujet est la bienvenue.
+public class KafkaHealthChecker {
 
-    Interactions avec d'autres équipes :
-        L'équipe TSP a rencontré des difficultés pour envoyer des requêtes à l'API Gateway. Pour résoudre ce problème, nous avons redémarré l'instance de l'API Gateway, ce qui les a débloqués. N'hésitez pas à nous faire part de tout autre problème lié à cela.
+    private String bootstrapServers; // Liste des serveurs Kafka séparés par des virgules
 
-    Informations diverses :
-        Le VDI fonctionne sans accroc aujourd'hui.
-        Comme communiqué précédemment, ANIS sera en congé la semaine prochaine. Veuillez planifier vos besoins en conséquence.
+    public KafkaHealthChecker(String bootstrapServers) {
+        this.bootstrapServers = bootstrapServers;
+    }
 
-Je reste à votre disposition pour toute question ou clarification supplémentaire. N'oubliez pas de communiquer tout changement ou préoccupation à temps pour garantir une coordination fluide entre nos équipes.
+    public String checkClusterHealth() {
+        Properties config = new Properties();
+        config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
-Bonne journée à tous,
+        try (AdminClient adminClient = AdminClient.create(config)) {
+            // Vérifier l'état du cluster Kafka
+            DescribeClusterResult clusterResult = adminClient.describeCluster(new DescribeClusterOptions().timeoutMs(5000));
+
+            // Vérifier les brokers
+            Collection<Node> nodes = clusterResult.nodes().get();
+            if (nodes.isEmpty()) {
+                return "DOWN";
+            }
+
+            for (Node node : nodes) {
+                if (!node.hasRack()) { // Utiliser une condition appropriée pour vérifier si le broker est opérationnel
+                    return "DOWN";
+                }
+            }
+
+            // Vérifier l'état des topics ici si nécessaire
+
+            return "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            // Gérer les exceptions liées aux opérations de l'AdminClient
+            Thread.currentThread().interrupt();
+            return "DOWN";
+        } catch (Exception e) {
+            // Gérer les autres exceptions
+            return "DOWN";
+        }
+    }
+
+    public static void main(String[] args) {
+        KafkaHealthChecker checker = new KafkaHealthChecker("localhost:9092"); // Remplacer par vos serveurs Kafka
+        String clusterStatus = checker.checkClusterHealth();
+        System.out.println("Status: " + clusterStatus);
+    }
+}
