@@ -1,59 +1,14 @@
-package com.hmz.configInjecteur.service;
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.DescribeClusterOptions;
-import org.apache.kafka.clients.admin.DescribeClusterResult;
-import org.apache.kafka.common.Node;
+Bonjour à tous,
 
-import java.util.Collection;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
+Je suis heureux de vous annoncer que nous avons terminé le développement pour le projet SCFP. Actuellement, nous sommes en phase de tests pour vérifier et corriger les anomalies potentielles.
 
-public class KafkaHealthChecker {
+Hier, nous avons franchi une étape importante : nous avons réussi à lancer le fichier JAR en interaction avec Kafka. Cela a été une avancée significative puisque cela nous permet maintenant de disposer d'un environnement de test opérationnel.
 
-    private String bootstrapServers; // Liste des serveurs Kafka séparés par des virgules
+Concernant les tests spécifiques, la tâche ICO-79 a été testée avec succès et est prête à être intégrée (merged) dans notre branche principale.
 
-    public KafkaHealthChecker(String bootstrapServers) {
-        this.bootstrapServers = bootstrapServers;
-    }
+Pour aujourd'hui, notre objectif est de continuer sur cette lancée et de tester les autres anomalies identifiées. Nous souhaitons nous assurer que tout fonctionne comme prévu avant de procéder à d'autres intégrations.
 
-    public String checkClusterHealth() {
-        Properties config = new Properties();
-        config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+En ce qui concerne le projet EPI, je suis conscient de l'urgence potentielle. Nous pouvons réorienter nos efforts sur ce dernier si nécessaire. Cependant, je recommande de poursuivre les tests pour SCFP aujourd'hui afin de maintenir notre élan et de garantir la stabilité de notre travail.
 
-        try (AdminClient adminClient = AdminClient.create(config)) {
-            // Vérifier l'état du cluster Kafka
-            DescribeClusterResult clusterResult = adminClient.describeCluster(new DescribeClusterOptions().timeoutMs(5000));
-
-            // Vérifier les brokers
-            Collection<Node> nodes = clusterResult.nodes().get();
-            if (nodes.isEmpty()) {
-                return "DOWN";
-            }
-
-            for (Node node : nodes) {
-                if (!node.hasRack()) { // Utiliser une condition appropriée pour vérifier si le broker est opérationnel
-                    return "DOWN";
-                }
-            }
-
-            // Vérifier l'état des topics ici si nécessaire
-
-            return "OK";
-        } catch (InterruptedException | ExecutionException e) {
-            // Gérer les exceptions liées aux opérations de l'AdminClient
-            Thread.currentThread().interrupt();
-            return "DOWN";
-        } catch (Exception e) {
-            // Gérer les autres exceptions
-            return "DOWN";
-        }
-    }
-
-    public static void main(String[] args) {
-        KafkaHealthChecker checker = new KafkaHealthChecker("localhost:9092"); // Remplacer par vos serveurs Kafka
-        String clusterStatus = checker.checkClusterHealth();
-        System.out.println("Status: " + clusterStatus);
-    }
-}
+Je reste à votre disposition pour toute question ou pour discuter des priorités si vous estimez que nous devons revoir notre planification.
