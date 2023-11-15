@@ -1,14 +1,1 @@
-
-Bonjour à tous,
-
-Je suis heureux de vous annoncer que nous avons terminé le développement pour le projet SCFP. Actuellement, nous sommes en phase de tests pour vérifier et corriger les anomalies potentielles.
-
-Hier, nous avons franchi une étape importante : nous avons réussi à lancer le fichier JAR en interaction avec Kafka. Cela a été une avancée significative puisque cela nous permet maintenant de disposer d'un environnement de test opérationnel.
-
-Concernant les tests spécifiques, la tâche ICO-79 a été testée avec succès et est prête à être intégrée (merged) dans notre branche principale.
-
-Pour aujourd'hui, notre objectif est de continuer sur cette lancée et de tester les autres anomalies identifiées. Nous souhaitons nous assurer que tout fonctionne comme prévu avant de procéder à d'autres intégrations.
-
-En ce qui concerne le projet EPI, je suis conscient de l'urgence potentielle. Nous pouvons réorienter nos efforts sur ce dernier si nécessaire. Cependant, je recommande de poursuivre les tests pour SCFP aujourd'hui afin de maintenir notre élan et de garantir la stabilité de notre travail.
-
-Je reste à votre disposition pour toute question ou pour discuter des priorités si vous estimez que nous devons revoir notre planification.
+Objet : Discordance des attributs dans le fichier JSON et le catalogue de donnéesBonjour Sam,J'espère que tu vas bien. Je t'écris pour te signaler une incohérence que nous avons observée dans la structuration des attributs entre notre catalogue de données et le fichier JSON associé à la requête.Nous avons constaté que les noms des attributs ne correspondent pas directement entre les deux formats. Par exemple, dans notre catalogue de données, un attribut est nommé payeeName, alors que dans le fichier JSON, il est représenté sous forme d'objet, comme payee.name.Ci-dessous, tu trouveras une liste des attributs concernés pour que tu puisses avoir une meilleure vue d'ensemble du problème :Dans le catalogue de données : payeeName Dans le fichier JSON : payee.name[Inclure d'autres exemples ici]
