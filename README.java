@@ -1,18 +1,40 @@
-D'accord, voici une version plus souple et concise du mail :
+#!/bin/bash
 
----
+# Créer un dossier pour le projet
+mkdir monProjet
+cd monProjet
 
-Objet : Demande de Télétravail pour Mardi
+# Initialiser un nouveau projet Node.js
+npm init -y
 
-Salut [Nom de votre chef],
+# Installer les dépendances nécessaires
+npm install openapi-to-postmanv2 postman-to-openapi
 
-J'espère que tu vas bien. Je voulais te demander si je peux travailler à distance ce mardi. Pour compenser, je viendrai au bureau jeudi. 
+# Créer le script de conversion
+cat <<EOF > convert.js
+const fs = require('fs');
+const openApiToPostman = require('openapi-to-postmanv2');
+const postmanToOpenApi = require('postman-to-openapi');
 
-Merci d'avance pour ta compréhension. N'hésite pas si tu as des questions.
+const [,, openApiInputFile, openApiOutputFile] = process.argv;
 
-Cordialement,
-[Votre nom]
+const openApiData = fs.readFileSync(openApiInputFile, 'utf8');
 
----
+openApiToPostman.convert({ type: 'string', data: openApiData }, (err, conversionResult) => {
+  if (!conversionResult.result) {
+    console.error('Conversion échouée:', conversionResult.reason);
+    return;
+  }
 
-Ce mail est plus décontracté et va droit au but, tout en restant professionnel.
+  const postmanCollection = conversionResult.output[0].data;
+  postmanToOpenApi(postmanCollection, openApiOutputFile, { defaultTag: 'General' })
+    .then(() => console.log('Conversion réussie en OpenAPI 3.0.3'))
+    .catch(err => console.error('Erreur de conversion:', err));
+});
+EOF
+
+# Donner les droits d'exécution au script
+chmod +x convert.js
+
+# Message de fin
+echo "Le projet est prêt. Utilisez ./convert.js <input-file> <output-file> pour convertir."
