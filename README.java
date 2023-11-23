@@ -1,29 +1,40 @@
-const fs = require('fs');
-const Converter = require('openapi-to-postmanv2');
-const postmanToOpenApi = require('postman-to-openapi');
+Pour réaliser cette tâche en Java 8, vous pouvez suivre les étapes suivantes :
 
-const [,, openApiInputFile, openApiOutputFile] = process.argv;
+1. **Extraire le nom du fichier du chemin d'entrée :**
+   Utilisez la classe `Paths` pour créer un objet `Path` à partir de votre chemin de fichier, puis utilisez la méthode `getFileName()` pour obtenir le nom du fichier.
 
-fs.readFile(openApiInputFile, 'utf8', (err, openApiData) => {
-  if (err) {
-    console.error('Erreur de lecture du fichier OpenAPI:', err);
-    return;
-  }
+2. **Obtenir la date actuelle :**
+   Utilisez la classe `LocalDate` de Java 8 pour obtenir la date du jour.
 
-  Converter.convert({ type: 'string', data: openApiData }, {}, (convertErr, conversionResult) => {
-    if (convertErr) {
-      console.error('Erreur lors de la conversion en collection Postman:', convertErr);
-      return;
+3. **Construire le nouveau chemin :**
+   Concaténez le nom du fichier (sans l'extension `.csv`), la date du jour, et ajoutez de nouveau l'extension `.csv`.
+
+Voici un exemple de code qui implémente ces étapes :
+
+```java
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
+public class Main {
+    public static void main(String[] args) {
+        String inputPath = "chemin/vers/votre/fichier.csv"; // Remplacez par votre chemin
+        Path path = Paths.get(inputPath);
+        
+        // Extraire le nom du fichier sans l'extension
+        String fileName = path.getFileName().toString();
+        fileName = fileName.substring(0, fileName.lastIndexOf('.'));
+
+        // Obtenir la date actuelle
+        String currentDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        // Construire le nouveau chemin
+        String newPath = fileName + "_" + currentDate + ".csv";
+
+        System.out.println("Nouveau chemin : " + newPath);
     }
-    
-    if (!conversionResult.result) {
-      console.error('Conversion échouée:', conversionResult.reason);
-      return;
-    }
+}
+```
 
-    const postmanCollection = conversionResult.output[0].data;
-    postmanToOpenApi(postmanCollection, openApiOutputFile, { defaultTag: 'General' })
-      .then(() => console.log('Conversion réussie en OpenAPI 3.0.3'))
-      .catch(postmanErr => console.error('Erreur lors de la conversion en OpenAPI:', postmanErr));
-  });
-});
+Ce code générera un nouveau chemin avec le nom du fichier original, la date du jour formatée en `yyyyMMdd`, et l'extension `.csv`. Assurez-vous de remplacer `"chemin/vers/votre/fichier.csv"` par le chemin réel de votre fichier CSV.
