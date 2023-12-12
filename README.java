@@ -1,5 +1,25 @@
-Récupération d'une Map à partir d'un fichier de configuration : Environ 1 jour
-Splitting de la Map et extraction de valeurs JSON : Environ 1 à 1.5 jours
-Affichage des attributs et de leurs valeurs dans les logs : Moins d'un jour
-Vérification des données sensibles : Environ 1 jour
-Intégration et tests finaux : Environ 1 jour
+import groovy.json.JsonSlurper
+
+// Fonction pour splitter la chaîne en tableau
+def splitStringIntoArray(String inputString) {
+    return inputString.split(",")
+}
+
+// Fonction pour récupérer la valeur de l'attribut JSON
+def getJsonValue(String jsonInput, String attributeName) {
+    def jsonSlurper = new JsonSlurper()
+    def object = jsonSlurper.parseText(jsonInput)
+    
+    return object[attributeName]
+}
+
+// Exemple d'utilisation
+def inputString = "attribut1,attribut2,attribut3" // Liste des attributs séparés par des virgules
+def jsonInput = '{"attribut1": "valeur1", "attribut2": "valeur2", "attribut3": "valeur3"}'
+
+def attributesArray = splitStringIntoArray(inputString)
+
+attributesArray.each { attributeName ->
+    def value = getJsonValue(jsonInput, attributeName)
+    println("Valeur de ${attributeName}: ${value}")
+}
