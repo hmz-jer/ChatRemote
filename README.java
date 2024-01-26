@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Vérifie si le nombre de récurrences est passé en argument
+# Vérifie si le nombre d'objets dans la liste est passé en argument
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <nombre de récurrences>"
+    echo "Usage: $0 <nombre d'objets dans la liste>"
     exit 1
 fi
 
@@ -12,14 +12,14 @@ attribut2="valeur2"
 attribut3="valeur3"
 attribut4="valeur4"
 
-# Le nombre de récurrences de attributA
-nombre_reccurences=$1
+# Le nombre d'objets dans la liste
+nombre_objets=$1
 
-# Créer le cinquième attribut comme une liste
+# Créer le cinquième attribut comme une liste d'objets JSON
 liste_attributA="["
-for ((i = 1; i <= nombre_reccurences; i++)); do
-    liste_attributA+="\"attributA\""
-    if [ $i -lt $nombre_reccurences ]; then
+for ((i = 1; i <= nombre_objets; i++)); do
+    liste_attributA+="{\"attributA\":\"valeurA\", \"attributB\":\"valeurB\", \"attributC\":\"valeurC\"}"
+    if [ $i -lt $nombre_objets ]; then
         liste_attributA+=", "
     fi
 done
