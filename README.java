@@ -16,7 +16,14 @@ attribut4="valeur4"
 nombre_reccurences=$1
 
 # Créer le cinquième attribut comme une liste
-liste_attributA=$(jq -n "[{\"attributA\":\"valeurA\"} * $nombre_reccurences]")
+liste_attributA="["
+for ((i = 1; i <= nombre_reccurences; i++)); do
+    liste_attributA+="\"attributA\""
+    if [ $i -lt $nombre_reccurences ]; then
+        liste_attributA+=", "
+    fi
+done
+liste_attributA+="]"
 
 # Créer le fichier JSON avec les attributs
 echo "{\"attribut1\":\"$attribut1\", \"attribut2\":\"$attribut2\", \"attribut3\":\"$attribut3\", \"attribut4\":\"$attribut4\", \"liste_attributA\":$liste_attributA}" > fichier.json
