@@ -1,43 +1,33 @@
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.KeyManagerFactory;
-import java.security.KeyStore;
-import java.net.URL;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLSession;
 
-public class HttpsClientExample {
+public class DisableHostnameVerification {
 
     public static void main(String[] args) {
         try {
-            // Charger le keystore et le truststore
-            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
-            keyStore.load(new FileInputStream("chemin/vers/keystore.jks"), "motDePasseKeystore".toCharArray());
+            // Créer un contexte SSL qui n'effectue pas de vérification du nom d'hôte
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, null, new java.security.SecureRandom());
 
-            KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-            trustStore.load(new FileInputStream("chemin/vers/truststore.jks"), "motDePasseTruststore".toCharArray());
+            // Installer le gestionnaire d'hôtes qui ne vérifie pas les certificats
+            HostnameVerifier allHostsValid = new HostnameVerifier() {
+                public boolean verify(String hostname, SSLSession session) {
+                    return true; // Accepter tout nom d'hôte
+                }
+            };
 
-            // Initialiser le KeyManagerFactory avec le keystore
-            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            keyManagerFactory.init(keyStore, "motDePasseKeystore".toCharArray());
+            // Appliquer les paramètres au niveau global (affecte toutes les connexions HttpsURLConnection)
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+            HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
 
-            // Initialiser le TrustManagerFactory avec le truststore
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            trustManagerFactory.init(trustStore);
+            // À partir d'ici, toute connexion HttpsURLConnection ignorera la vérification du nom d'hôte
+            // Exemple d'utilisation :
+            HttpsURLConnection conn = (HttpsURLConnection) new URL("https://exemple.com").openConnection();
+            // Lire la réponse, etc.
 
-            // Initialiser le SSLContext avec les key managers et trust managers
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), new java.security.SecureRandom());
-
-            // Ouvrir la connexion
-            URL url = new URL("https://example.com");
-            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-            conn.setSSLSocketFactory(sslContext.getSocketFactory());
-
-            // Effectuer la requête et lire la réponse
-            InputStream inputStream = conn.getInputStream();
-            // Lire inputStream pour obtenir la réponse...
-
-            System.out.println("Réponse obtenue.");
+            System.out.println("Connexion réussie");
         } catch (Exception e) {
             e.printStackTrace();
         }
