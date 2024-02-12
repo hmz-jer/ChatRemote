@@ -1,33 +1,48 @@
-import javax.net.ssl.HttpsURLConnection;
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
-import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
 
-public static void printServerSAN(String serverUrl) {
-    try {
-        URL url = new URL(serverUrl);
-        HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-        conn.connect();
-        
-        Certificate[] certs = conn.getServerCertificates();
-        System.out.println("Certificats du serveur :");
-        for (Certificate cert : certs) {
-            if (cert instanceof X509Certificate) {
-                X509Certificate x509Cert = (X509Certificate) cert;
-                Collection<List<?>> sanList = x509Cert.getSubjectAlternativeNames();
-                if (sanList != null) {
-                    System.out.println("Subject Alternative Names :");
-                    for (List<?> sanItem : sanList) {
-                        // Le type est dans sanItem.get(0), la valeur dans sanItem.get(1)
-                        System.out.println(sanItem.get(1).toString());
-                    }
-                }
-            }
+public static boolean sendJsonAndCheckFor413(String urlString, SSLContext sslContext, String jsonContent, boolean secureConnection) throws Exception {
+    URL url = new URL(urlString);
+    HttpURLConnection conn;
+
+    if (secureConnection && url.getProtocol().equals("https")) {
+        conn = (HttpsURLConnection) url.openConnection();
+        if (sslContext != null) {
+            ((HttpsURLConnection) conn).setSSLSocketFactory(sslContext.getSocketFactory());
         }
-    } catch (SSLPeerUnverifiedException e) {
-        System.out.println("Le pair SSL n'a pas pu être vérifié.");
-    } catch (Exception e) {
-        e.printStackTrace();
+    } else {
+        conn = (HttpURLConnection) url.openConnection();
     }
+
+    conn.setRequestMethod("POST");
+    conn.setRequestProperty("Content-Type", "application/json");
+    conn.setDoOutput(true);
+
+    // Envoyer le contenu JSON dans la requête POST
+    try (DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
+        wr.writeBytes(jsonContent);
+        wr.flush();
+    }
+
+    int responseCode = conn.getResponseCode();
+    
+    // Lire la réponse du serveur
+    BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+    String inputLine;
+    StringBuilder response = new StringBuilder();
+
+    while ((inputLine = in.readLine()) != null) {
+        response.append(inputLine);
+    }
+    in.close();
+
+    // Afficher la réponse complète
+    System.out.println("Réponse du serveur : " + response.toString());
+
+    return responseCode == 413;
 }
