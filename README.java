@@ -1,84 +1,37 @@
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.ssl.SSLContextBuilder;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+public static boolean sendAndCheckFor413UsingCurl(String urlString, String encryptedContent, String cacertPath, String certPath, String keyPath) {
+    try {
+        // Construit la commande curl
+        String command = String.format("curl -X POST -H \"Content-Type: application/json\" --cacert %s --cert %s --key %s -d '%s' %s",
+                cacertPath, certPath, keyPath, encryptedContent, urlString);
 
-import java.nio.file.Paths;
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.command("sh", "-c", command);
 
-@Configuration
-public class HttpClientConfig {
+        Process process = builder.start();
 
-    @Value("${ssl.keystore.location}")
-    private String keystorePath;
+        // Lire la sortie standard et d'erreur
+        BufferedReader stdInput = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        BufferedReader stdError = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
-    @Value("${ssl.keystore.password}")
-    private String keystorePassword;
-
-    @Value("${ssl.truststore.location}")
-    private String truststorePath;
-
-    @Value("${ssl.truststore.password}")
-    private String truststorePassword;
-
-    @Bean
-    public CloseableHttpClient httpClient() throws Exception {
-        SSLContext sslContext = SSLContextBuilder.create()
-                .loadKeyMaterial(Paths.get(keystorePath).toUri().toURL(), keystorePassword.toCharArray(), keystorePassword.toCharArray())
-                .loadTrustMaterial(Paths.get(truststorePath).toUri().toURL(), truststorePassword.toCharArray())
-                .build();
-
-        SSLConnectionSocketFactory socketFactory = new SSLConnectionSocketFactory(sslContext, new NoopHostnameVerifier());
-
-        return HttpClients.custom()
-                .setSSLSocketFactory(socketFactory)
-                .build();
-    }
-
-
-
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
-import java.io.IOException;
-
-public class HttpClientPostExample {
-
-    public static void main(String[] args) {
-        // Créez une instance de CloseableHttpClient.
-        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-            
-            // Préparez l'URL et les données JSON à envoyer.
-            String url = "https://exemple.com/api";
-            String json = "{\"key\":\"value\"}";
-            
-            // Créez l'objet HttpPost et définissez l'en-tête Content-Type.
-            HttpPost httpPost = new HttpPost(url);
-            httpPost.setHeader("Content-Type", "application/json");
-            
-            // Associez les données JSON à la requête.
-            StringEntity stringEntity = new StringEntity(json);
-            httpPost.setEntity(stringEntity);
-            
-            // Exécutez la requête.
-            HttpResponse response = httpClient.execute(httpPost);
-            
-            // Lisez le statut de la réponse et le contenu.
-            int statusCode = response.getStatusLine().getStatusCode();
-            String responseBody = EntityUtils.toString(response.getEntity());
-            
-            // Affichez le statut et la réponse.
-            System.out.println("Status Code: " + statusCode);
-            System.out.println("Response Body: " + responseBody);
-            
-        } catch (IOException e) {
-            e.printStackTrace();
+        // Afficher la sortie standard
+        String s;
+        while ((s = stdInput.readLine()) != null) {
+            System.out.println(s);
         }
+
+        // Afficher la sortie d'erreur
+        while ((s = stdError.readLine()) != null) {
+            System.out.println(s);
+        }
+
+        int exitCode = process.waitFor();
+        System.out.println("Exited with code : " + exitCode);
+
+        // Vérifier le code de sortie pour déterminer si la réponse était 413
+        return exitCode == 0; // Dans ce contexte, le code de sortie 0 ne signifie pas nécessairement que la réponse était 413. Vous devrez analyser la sortie pour le déterminer.
+
+    } catch (IOException | InterruptedException e) {
+        e.printStackTrace();
+        return false;
     }
 }
