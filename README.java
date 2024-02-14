@@ -1,1 +1,31 @@
-Objet : Demande de congé parental pour naissanceCher [Nom du Manager],J'espère que tu vas bien. Je t'écris pour te tenir informé d'un événement heureux et important dans ma vie personnelle. Ma femme est enceinte et le terme est prévu pour la deuxième ou troisième semaine de mars.En prévision de cet heureux événement, je prévois de prendre un congé parental de trois semaines à partir de la date de l'accouchement pour être aux côtés de ma femme et accueillir notre enfant. Je tenais à te prévenir à l'avance pour que nous puissions organiser mon absence de manière à minimiser l'impact sur notre équipe et nos projets.Il est également possible que l'accouchement se produise avant la date prévue. Dans ce cas, je te contacterai dès que possible pour te tenir informé et ajuster mes dates de congé en conséquence.Je suis pleinement engagé à assurer une transition en douceur avant mon départ et je suis disposé à travailler en amont sur les dossiers prioritaires et à former des collègues si nécessaire pour couvrir mes responsabilités pendant mon absence.Je te remercie par avance pour ta compréhension et ton soutien pendant cette période importante pour ma famille et moi. N'hésite pas à me faire part de toute préoccupation ou besoin supplémentaire en vue de mon départ en congé.Bien cordialement,
+public static boolean sendAndCheckFor413UsingCurl(String urlString, String encryptedContent, String cacertPath, String certPath, String keyPath) {
+    try {
+        // Ajoute -w "%{http_code}" pour inclure le code de réponse HTTP dans la sortie
+        String command = String.format("curl -X POST -H \"Content-Type: application/json\" --cacert %s --cert %s --key %s -d '%s' %s -w \"%%{http_code}\"",
+                cacertPath, certPath, keyPath, encryptedContent, urlString);
+
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.command("sh", "-c", command);
+
+        Process process = builder.start();
+
+        // Lire la sortie combinée (standard + code HTTP)
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        StringBuilder output = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            output.append(line);
+        }
+
+        int exitCode = process.waitFor();
+        System.out.println("Exited with code : " + exitCode);
+        System.out.println("Response: " + output);
+
+        // Vérifier si la sortie contient "413"
+        return output.toString().endsWith("413");
+
+    } catch (IOException | InterruptedException e) {
+        e.printStackTrace();
+        return false;
+    }
+}
