@@ -1,51 +1,13 @@
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCharsets;
-import java.nio.file.attribute.PosixFilePermissions;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+Planification de mon congé parental pour naissance
 
-public static boolean sendAndCheckFor413UsingCurl(String urlString, String encryptedContent, String cacertPath, String certPath, String keyPath) {
-    Path tempFile = null;
-    try {
-        // Créer un fichier temporaire pour les données JSON
-        tempFile = Files.createTempFile("encryptedContent", ".json", PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
-        Files.write(tempFile, encryptedContent.getBytes(StandardCharsets.UTF_8));
-        
-        // Construire la commande curl en utilisant le fichier temporaire pour les données
-        String command = String.format("curl -X POST -H \"Content-Type: application/json\" --cacert %s --cert %s --key %s -d @%s %s -w \"%%{http_code}\"",
-                cacertPath, certPath, keyPath, tempFile.toAbsolutePath(), urlString);
+Bonjour Sorin,
 
-        ProcessBuilder builder = new ProcessBuilder();
-        builder.command("sh", "-c", command);
+J'espère que tu vas bien. Suite à notre discussion récente, je tenais à te fournir plus de détails concernant mon prochain congé parental. Comme discuté, ma femme est enceinte et nous attendons notre enfant pour la fin du mois de mars. La date théorique de l'accouchement est prévue entre le 20 et le 27 mars.
 
-        Process process = builder.start();
+Je prévois de prendre un congé parental de trois semaines à partir de la date de l'accouchement afin d'accueillir notre nouveau-né. 
 
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        String line;
-        StringBuilder output = new StringBuilder();
-        while ((line = reader.readLine()) != null) {
-            output.append(line);
-        }
+Étant donné la nature imprévisible de l'accouchement, je tenais à te prévenir que cela pourrait survenir avant la date prévue ,dans ce cas, je te contacterai dès que possible pour te tenir informé et ajuster mes dates de congé en conséquence.
 
-        int exitCode = process.waitFor();
-        System.out.println("Exited with code : " + exitCode);
-        System.out.println("Response: " + output);
+Je te remercie par avance.
 
-        // Vérifier si la sortie contient "413"
-        return output.toString().contains("413");
-    } catch (IOException | InterruptedException e) {
-        e.printStackTrace();
-        return false;
-    } finally {
-        // Nettoyer et supprimer le fichier temporaire
-        if (tempFile != null) {
-            try {
-                Files.deleteIfExists(tempFile);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-}
+Bien cordialement.
