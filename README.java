@@ -1,23 +1,57 @@
-Voici un brouillon de votre e-mail basé sur les informations fournies :
+# Simulator API pour Stresser l'Environnement Digital SI
 
-Objet : Résultats des Tests de Stress sur l'Environnement SI TOK
+La Simulator API est conçue pour générer et envoyer des requêtes configurables afin de tester la robustesse et la performance de l'environnement Digital SI. 
 
-Bonjour,
+Cet outil permet aux développeurs et aux testeurs de simuler différentes charges et scénarios d'utilisation pour évaluer la réactivité et la fiabilité du système.
 
-Nous vous écrivons pour partager les résultats des tests de stress que nous avons récemment effectués sur l'environnement SI TOK. L'objectif principal de ces tests était de déterminer la limite de la taille des messages que l'environnement peut traiter sans rencontrer l'erreur "Request Entity Too Large (413)".
+## Fonctionnalités
 
-Pour ce faire, nous avons conçu et exécuté deux scénarios de test distincts, en veillant à ce que tous les messages envoyés soient sécurisés via un processus de signature et de chiffrement JWE/JWS.
-Scénario 1 : Nombre d'Opérations dans la Liste des Opérations
+- **Génération de Requêtes Configurables :** Permet la création dynamique de requêtes basées sur les spécifications de l'utilisateur, incluant différentes opérations telles que tokenisation, suppression, et détokenisation.
 
-Le premier scénario visait à déterminer le nombre maximal d'opérations que nous pouvions inclure dans la liste des opérations d'un message. Nous avons constaté que jusqu'à 67 opérations pouvaient être traitées avec succès lorsque la taille de l'attribut SData était fixée à 20 caractères alphanumériques.
-Scénario 2 : Taille de l'Attribut SData
+- **Support de Connexions Sécurisées :** Capable d'effectuer des requêtes via HTTP ou HTTPS, en fonction de la configuration de l'environnement cible.
 
-Dans le deuxième scénario, nous avons limité le nombre d'opérations à 50 et augmenté progressivement la taille de l'attribut SData. Il s'est avéré que la taille maximale de SData pouvait atteindre 63 caractères alphanumériques avant d'atteindre la limite qui déclenche l'erreur 413.
+- **Stress Test :** Conçu pour tester la capacité de l'environnement Digital SI à gérer des volumes élevés de requêtes et opérations.
+- **JWE/JWS:** Notre API utilise les standards JWE (JSON Web Encryption) et JWS (JSON Web Signature) pour assurer la confidentialité et l'intégrité des données échangées :
+  JWE - JSON Web Encryption
+## Prérequis
 
-Les deux scénarios ont été soigneusement documentés, et nous avons inclus des captures d'écran des résultats après chaque test pour illustrer nos conclusions.
+- Java 8
+- Spring Boot 2.3.3
+- [Gradle] pour la gestion du projet
 
-Ces tests révèlent des informations précieuses sur les capacités et les limites de l'environnement SI TOK, ce qui nous permettra d'optimiser nos intégrations futures et de prévoir les ajustements nécessaires pour éviter les dépassements de capacité.
+## Configuration
 
-Nous restons à votre disposition pour toute question ou pour discuter plus en détail des résultats et de leurs implications.
+Assurez-vous que les propriétés suivantes sont correctement définies dans le fichier `application.properties` :
 
-Cordialement,
+```properties
+# Configuration SSL
+keystore.path=chemin/vers/keystore
+keystore.password=motdepasse
+truststore.path=chemin/vers/truststore
+truststore.password=motdepasse
+
+# Configuration de l'API
+application.scheme=http # ou https pour les connexions sécurisées
+application.host=adresse.host.si
+application.port=port
+application.basePath=/chemin/base/api
+
+# Paramètres de test
+secure.connection=true # ou false pour désactiver SSL
+min.attributes=nombre minimum d'attributs
+max.attributes=nombre maximum d'attributs 
+```
+
+## Utilisation
+
+Utilisez les arguments suivants au démarrage de l'application pour spécifier l'opération désirée :
+
+    T ou R pour Tokenisation
+    S pour Suppression
+    D pour Détokenisation
+
+Exemple :
+
+```bash
+java -jar target/simulatorapi-0.0.1-SNAPSHOT.jar T
+```
