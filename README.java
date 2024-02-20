@@ -1,57 +1,65 @@
-# Simulator API pour Stresser l'Environnement Digital SI
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
 
-La Simulator API est conçue pour générer et envoyer des requêtes configurables afin de tester la robustesse et la performance de l'environnement Digital SI. 
+public static void main(String[] args) {
+    if (args.length < 1) {
+        System.out.println("Veuillez fournir un argument pour l'opération ou le chemin vers un fichier d'entrée.");
+        return;
+    }
 
-Cet outil permet aux développeurs et aux testeurs de simuler différentes charges et scénarios d'utilisation pour évaluer la réactivité et la fiabilité du système.
+    String firstArg = args[0];
+    String operationType;
+    String jsonContent = "";
 
-## Fonctionnalités
+    // Vérifier si l'argument est un chemin de fichier
+    Path filePath = Paths.get(firstArg);
+    if (Files.exists(filePath)) {
+        try {
+            List<String> lines = Files.readAllLines(filePath);
+            if (!lines.isEmpty()) {
+                operationType = lines.get(0); // La première ligne indique le type d'opération
+                jsonContent = String.join("\n", lines.subList(1, lines.size())); // Le reste du fichier contient les données JSON
+            } else {
+                System.out.println("Le fichier est vide.");
+                return;
+            }
+        } catch (IOException e) {
+            System.out.println("Erreur lors de la lecture du fichier : " + e.getMessage());
+            return;
+        }
+    } else {
+        operationType = firstArg; // Utiliser l'argument comme type d'opération si ce n'est pas un chemin de fichier
+    }
 
-- **Génération de Requêtes Configurables :** Permet la création dynamique de requêtes basées sur les spécifications de l'utilisateur, incluant différentes opérations telles que tokenisation, suppression, et détokenisation.
+    String operation;
+    switch (operationType) {
+        case "T":
+        case "R": // 'R' est traité comme 'T'
+            operation = "tokenisation";
+            break;
+        case "S":
+            operation = "delete-token";
+            break;
+        case "D":
+            operation = "costo/detokenisation";
+            break;
+        default:
+            System.out.println("Argument non reconnu ou fichier non trouvé.");
+            return;
+    }
 
-- **Support de Connexions Sécurisées :** Capable d'effectuer des requêtes via HTTP ou HTTPS, en fonction de la configuration de l'environnement cible.
+    // Configuration optionnelle du SSLContext pour les connexions sécurisées
+    SSLContext sslContext = null;
+    if (secureConnection) {
+        sslContext = sslConfiguration.createSSLContext(keystorePath, keystorePassword, truststorePath, truststorePassword);
+    }
 
-- **Stress Test :** Conçu pour tester la capacité de l'environnement Digital SI à gérer des volumes élevés de requêtes et opérations.
-- **JWE/JWS:** Notre API utilise les standards JWE (JSON Web Encryption) et JWS (JSON Web Signature) pour assurer la confidentialité et l'intégrité des données échangées :
-  JWE - JSON Web Encryption
-## Prérequis
-
-- Java 8
-- Spring Boot 2.3.3
-- [Gradle] pour la gestion du projet
-
-## Configuration
-
-Assurez-vous que les propriétés suivantes sont correctement définies dans le fichier `application.properties` :
-
-```properties
-# Configuration SSL
-keystore.path=chemin/vers/keystore
-keystore.password=motdepasse
-truststore.path=chemin/vers/truststore
-truststore.password=motdepasse
-
-# Configuration de l'API
-application.scheme=http # ou https pour les connexions sécurisées
-application.host=adresse.host.si
-application.port=port
-application.basePath=/chemin/base/api
-
-# Paramètres de test
-secure.connection=true # ou false pour désactiver SSL
-min.attributes=nombre minimum d'attributs
-max.attributes=nombre maximum d'attributs 
-```
-
-## Utilisation
-
-Utilisez les arguments suivants au démarrage de l'application pour spécifier l'opération désirée :
-
-    T ou R pour Tokenisation
-    S pour Suppression
-    D pour Détokenisation
-
-Exemple :
-
-```bash
-java -jar target/simulatorapi-0.0.1-SNAPSHOT.jar T
-```
+    if (!jsonContent.isEmpty()) {
+        // Si jsonContent n'est pas vide, cela signifie que nous avons lu un fichier. Traiter le contenu JSON directement.
+        performJsonRequestWithContent(operation, sslContext, secureConnection, jsonContent);
+    } else {
+        // Sinon, générer des données basées sur l'opération spécifiée.
+        performOptimizedJsonRequest(operation, sslContext, secureConnection);
+    }
+}
