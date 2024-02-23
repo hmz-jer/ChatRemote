@@ -1,5 +1,4 @@
  private void modifySchema(Map<String, Object> schema) {
-    // Parcourir récursivement le schéma pour trouver des objets avec un attribut "properties".
     schema.forEach((key, value) -> {
         if ("properties".equals(key) && value instanceof Map) {
             // Nous sommes sous un objet "properties", traitons chaque propriété.
@@ -9,15 +8,13 @@
                     Map<String, Object> propertyMap = (Map<String, Object>) propValue;
                     if (propertyMap.containsKey("examples")) {
                         Object examples = propertyMap.get("examples");
-                        if (examples instanceof Map) {
-                            Map<?, ?> examplesMap = (Map<?, ?>) examples;
-                            if (!examplesMap.isEmpty()) {
-                                Object firstExampleValue = examplesMap.values().iterator().next();
-                                // Remplacer "examples" par "example" avec la première valeur trouvée.
-                                propertyMap.put("example", firstExampleValue);
-                            }
-                            propertyMap.remove("examples");
+                        if (examples instanceof List && !((List<?>) examples).isEmpty()) {
+                            // Prendre le premier élément de la liste d'exemples
+                            Object firstExample = ((List<?>) examples).get(0);
+                            // Remplacer "examples" par "example" avec la première valeur trouvée.
+                            propertyMap.put("example", firstExample);
                         }
+                        propertyMap.remove("examples");
                     }
                 }
             });
