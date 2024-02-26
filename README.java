@@ -1,29 +1,24 @@
- import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
+ import java.util.List;
 import java.util.Map;
 
 public class SchemaModifier {
 
-    public void convertConstToEnum(Map<String, Object> schema) {
-        // Créer une nouvelle liste pour éviter la modification concurrente
-        List<String> keys = new ArrayList<>(schema.keySet());
-        for (String key : keys) {
-            Object value = schema.get(key);
-            
-            if (value instanceof Map) {
-                // Cas récursif: la valeur est un objet JSON, qui pourrait être un schéma.
-                @SuppressWarnings("unchecked")
-                Map<String, Object> subSchema = (Map<String, Object>) value;
-                convertConstToEnum(subSchema); // Appel récursif pour traiter les sous-schémas.
-            }
-            // Traitement spécifique pour la clé 'const'.
-            if ("const".equals(key)) {
-                Object constantValue = schema.get(key);
-                schema.remove("const");
-                schema.put("enum", Collections.singletonList(constantValue));
-                log(String.format("Converted const: %s to enum", constantValue));
+    public void ensureHttpsInServersUrls(Map<String, Object> schema) {
+        // Vérifie si le schéma contient un élément "servers"
+        if (schema.containsKey("servers") && schema.get("servers") instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> servers = (List<Map<String, Object>>) schema.get("servers");
+            for (Map<String, Object> server : servers) {
+                // Vérifie chaque serveur pour une clé "url"
+                if (server.containsKey("url")) {
+                    String url = (String) server.get("url");
+                    // Si l'URL ne commence pas par "https", ajoute "https://" au début
+                    if (!url.startsWith("https://")) {
+                        url = "https://" + url;
+                        server.put("url", url);
+                        log("Updated server URL to use HTTPS: " + url);
+                    }
+                }
             }
         }
     }
@@ -35,11 +30,16 @@ public class SchemaModifier {
 
     public static void main(String[] args) {
         // Exemple d'utilisation
-        Map<String, Object> schema = new HashMap<>();
-        schema.put("const", "value");
-        
-        new SchemaModifier().convertConstToEnum(schema);
-        
+        Map<String, Object> schema = Map.of(
+            "servers", List.of(
+                Map.of("url", "http://example.com"),
+                Map.of("url", "https://secure.example.com")
+            )
+        );
+
+        SchemaModifier modifier = new SchemaModifier();
+        modifier.ensureHttpsInServersUrls(schema);
+
         System.out.println(schema);
     }
 }
