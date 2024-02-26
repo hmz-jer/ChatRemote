@@ -1,33 +1,45 @@
- private void modifySchema(Map<String, Object> schema) {
-    schema.forEach((key, value) -> {
-        if ("properties".equals(key) && value instanceof Map) {
-            // Nous sommes sous un objet "properties", traitons chaque propriété.
-            Map<String, Object> properties = (Map<String, Object>) value;
-            properties.forEach((propKey, propValue) -> {
-                if (propValue instanceof Map) {
-                    Map<String, Object> propertyMap = (Map<String, Object>) propValue;
-                    if (propertyMap.containsKey("examples")) {
-                        Object examples = propertyMap.get("examples");
-                        if (examples instanceof List && !((List<?>) examples).isEmpty()) {
-                            // Prendre le premier élément de la liste d'exemples
-                            Object firstExample = ((List<?>) examples).get(0);
-                            // Remplacer "examples" par "example" avec la première valeur trouvée.
-                            propertyMap.put("example", firstExample);
-                        }
-                        propertyMap.remove("examples");
-                    }
-                }
-            });
-        } else if (value instanceof Map) {
-            // Continuer la recherche récursive dans d'autres parties du schéma.
-            modifySchema((Map<String, Object>) value);
-        } else if (value instanceof List) {
-            // Pour les listes, appliquer la modification récursive sur chaque élément de type Map.
-            ((List<?>) value).forEach(item -> {
-                if (item instanceof Map) {
-                    modifySchema((Map<String, Object>) item);
-                }
-            });
+ import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class SchemaModifier {
+
+    public void convertConstToEnum(Map<String, Object> schema) {
+        // Créer une nouvelle liste pour éviter la modification concurrente
+        List<String> keys = new ArrayList<>(schema.keySet());
+        for (String key : keys) {
+            Object value = schema.get(key);
+            
+            if (value instanceof Map) {
+                // Cas récursif: la valeur est un objet JSON, qui pourrait être un schéma.
+                @SuppressWarnings("unchecked")
+                Map<String, Object> subSchema = (Map<String, Object>) value;
+                convertConstToEnum(subSchema); // Appel récursif pour traiter les sous-schémas.
+            }
+            // Traitement spécifique pour la clé 'const'.
+            if ("const".equals(key)) {
+                Object constantValue = schema.get(key);
+                schema.remove("const");
+                schema.put("enum", Collections.singletonList(constantValue));
+                log(String.format("Converted const: %s to enum", constantValue));
+            }
         }
-    });
+    }
+
+    private void log(String message) {
+        // Implémentez votre logique de journalisation ici
+        System.out.println(message);
+    }
+
+    public static void main(String[] args) {
+        // Exemple d'utilisation
+        Map<String, Object> schema = new HashMap<>();
+        schema.put("const", "value");
+        
+        new SchemaModifier().convertConstToEnum(schema);
+        
+        System.out.println(schema);
+    }
 }
