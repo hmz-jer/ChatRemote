@@ -1,28 +1,11 @@
-{
-  "@angular/animations": "^17.3.0",
-  "@angular/cdk": "^17.3.0",
-  "@angular/common": "^17.3.0",
-  "@angular/compiler": "^17.3.0",
-  "@angular/core": "^17.3.0",
-  "@angular/forms": "^17.3.0",
-  "@angular/material": "^17.3.0",
-  "@angular/platform-browser": "^17.3.0",
-  "@angular/platform-browser-dynamic": "^17.3.0",
-  "@angular/router": "^17.3.0",
-  "rxjs": "~7.8.0",
-  "tslib": "^2.3.0",
-  "zone.js": "~0.14.3"
-}
-{
-  "@angular-devkit/build-angular": "^17.3.0",
-  "@angular/cli": "^17.3.0",
-  "@angular/compiler-cli": "^17.3.0",
-  "@types/jasmine": "~5.1.0",
-  "jasmine-core": "~5.1.0",
-  "karma": "~6.4.0",
-  "karma-chrome-launcher": "~3.2.0",
-  "karma-coverage": "~2.2.0",
-  "karma-jasmine": "~5.1.0",
-  "karma-jasmine-html-reporter": "~2.1.0",
-  "typescript": "~5.4.2"
-}
+Objet : Prochaines étapes et décisions concernant l'architecture de notre projet de refonte
+
+Cher Samuel,
+
+J'espère que tu vas bien. Suite à nos récentes discussions sur le projet de refonte de nos applications, je voulais récapituler les points sur lesquels nous nous sommes mis d'accord et discuter des prochaines étapes.
+
+Nous avons envisagé deux approches principales pour la consolidation de notre backend. La première approche consiste à créer un backend unique qui hébergera tous les services nécessaires pour nos différentes applications. La seconde approche envisage de maintenir un backend distinct pour chaque application (OXC), tout en regroupant les services communs dans un seul JAR, qui serait ensuite invoqué par chaque OXC.
+
+Après mûre réflexion, nous sommes arrivés à la conclusion qu'il serait préférable de prendre une décision finale sur l'approche à adopter une fois que nous aurons terminé la première version de la refonte de l'OMC. Cette étape nous fournira une meilleure compréhension des efforts de travail requis pour chaque approche, ainsi qu'une estimation plus précise des ressources nécessaires.
+
+À ce stade, il est difficile de fournir une estimation concrète des travaux pour les deux approches envisagées. Cependant, nous nous engageons à réaliser une évaluation détaillée une fois que nous aurons achevé la refonte de l'OMC. Cela nous permettra de faire un choix éclairé, en prenant en compte les avantages et les inconvénients de chaque option.
