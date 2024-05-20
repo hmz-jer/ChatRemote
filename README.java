@@ -1,11 +1,32 @@
-Notification de congé de paternité
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-Chère/Cher [Nom du Manager],
+public class ConsumerManager {
+    private final int numConsumers;
+    private final List<ConsumerRunner> consumers = new ArrayList<>();
+    private final ExecutorService executor;
 
-Je t'informe que mon congé de paternité a débuté le 26 mars, suite à la naissance de notre enfant. Heureusement, le bébé et sa mère vont bien.
+    public ConsumerManager(int numConsumers, String brokers, String groupId, String topic) {
+        this.numConsumers = numConsumers;
+        this.executor = Executors.newFixedThreadPool(numConsumers);
+        for (int i = 0; i < numConsumers; i++) {
+            ConsumerRunner consumer = new ConsumerRunner(brokers, groupId, topic);
+            consumers.add(consumer);
+        }
+    }
 
-Je serai absent jusqu'au 17 avril et je reprendrai le travail le 18 avril, conformément à nos politiques.
+    public void startConsumers() {
+        for (ConsumerRunner consumer : consumers) {
+            executor.submit(consumer);
+        }
+    }
 
-Je te remercie pour ta compréhension et ton soutien pendant cette période. N'hésite pas à me contacter pour toute question ou si tu as besoin de passer en revue quelque chose avant mon départ.
-
-Bien à toi,
+    public void stopConsumers() {
+        for (ConsumerRunner consumer : consumers) {
+            consumer.shutdown();
+        }
+        executor.shutdown();
+    }
+}
