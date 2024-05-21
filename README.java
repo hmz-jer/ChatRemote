@@ -1,4 +1,6 @@
- import org.apache.kafka.clients.consumer.Consumer;
+ 
+
+    import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -68,6 +70,67 @@ public class ConsumerRunner implements Runnable {
         running = false;
         if (consumer != null) {
             consumer.wakeup();
+        }
+    }
+
+    public static void main(String[] args) {
+        if (args.length < 4) {
+            System.out.println("Usage: KafkaConsumerApp <start|stop> <brokers> <groupId> <topic> <numConsumers>");
+            return;
+        }
+
+        String command = args[0];
+        String brokers = args[1];
+        String groupId = args[2];
+        String topic = args[3];
+        int numConsumers = Integer.parseInt(args[4]);
+
+        ConsumerManager manager = new ConsumerManager(numConsumers, brokers, groupId, topic);
+
+        if ("start".equalsIgnoreCase(command)) {
+            manager.startConsumers();
+            Runtime.getRuntime().addShutdownHook(new Thread(manager::stopConsumers));
+            System.out.println("Consumers started.");
+        } else if ("stop".equalsIgnoreCase(command)) {
+            manager.stopConsumers();
+            System.out.println("Consumers stopped.");
+        } else {
+            System.out.println("Unknown command: " + command);
+        }
+    }
+}
+
+class ConsumerManager {
+    private final int numConsumers;
+    private final List<ConsumerRunner> consumers = new ArrayList<>();
+    private final ExecutorService executor;
+
+    public ConsumerManager(int numConsumers, String brokers, String groupId, String topic) {
+        this.numConsumers = numConsumers;
+        this.executor = Executors.newFixedThreadPool(numConsumers);
+        for (int i = 0; i < numConsumers; i++) {
+            ConsumerRunner consumer = new ConsumerRunner(brokers, groupId, topic);
+            consumers.add(consumer);
+        }
+    }
+
+    public void startConsumers() {
+        for (ConsumerRunner consumer : consumers) {
+            executor.submit(consumer);
+        }
+    }
+
+    public void stopConsumers() {
+        for (ConsumerRunner consumer : consumers) {
+            consumer.shutdown();
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
         }
     }
 }
