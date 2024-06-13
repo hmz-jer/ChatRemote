@@ -13,7 +13,7 @@ dependencies {
 sourceSets {
     server {
         java {
-            srcDirs = ['src/main/java/server']
+            srcDirs = ['src/main/java/org/stet/server']
         }
         resources {
             srcDirs = ['resources/server']
@@ -21,7 +21,7 @@ sourceSets {
     }
     client {
         java {
-            srcDirs = ['src/main/java/client']
+            srcDirs = ['src/main/java/org/stet/client']
         }
         resources {
             srcDirs = ['resources/client']
@@ -33,7 +33,7 @@ task createServerJar(type: Jar) {
     archiveBaseName.set('server-socket')
     manifest {
         attributes(
-            'Main-Class': 'server.ServerSocket'
+            'Main-Class': 'org.stet.server.ServerSocket'
         )
     }
     from {
@@ -47,7 +47,7 @@ task createClientJar(type: Jar) {
     archiveBaseName.set('client')
     manifest {
         attributes(
-            'Main-Class': 'client.Client'
+            'Main-Class': 'org.stet.client.Client'
         )
     }
     from {
