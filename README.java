@@ -1,4 +1,4 @@
- package org.stet.server;
+ package org.s.server;
 
 import javax.net.ServerSocketFactory;
 import javax.net.ssl.KeyManagerFactory;
@@ -56,6 +56,7 @@ public class ServerSocket {
                         while ((inputLine = in.readLine()) != null) {
                             System.out.println("Received: " + inputLine);
                             out.println("Echo: " + inputLine);
+                            out.flush(); // Assurez-vous que les messages sont effectivement envoyés
                         }
                     }
                 }
