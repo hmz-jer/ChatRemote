@@ -1,2 +1,18 @@
 
-Gestion des Réponses et NotificationsRequis:Développement des mécanismes pour recevoir les réponses du backend.Conversion des réponses en format approprié pour l'API Gateway.Gestion des notifications envoyées du backend vers l'API Gateway.Estimation:Temps: 2 semaines5. Gestion des CertificatsRequis:Configuration des certificats SSL/TLS entre l'API Gateway et le backend Spring Boot.Mise en place de la gestion des certificats pour les communications sécurisées.Vérification de la validité des certificats et gestion des renouvellements.Estimation:Temps: 2 semaines6. Gestion des Connexions et SurveillanceRequis:Développement de la gestion des connexions synchrones et asynchrones.Surveillance des timeouts et des ruptures de protocole.Mise en place du partage des connexions et des mécanismes de tolérance aux pannes.Estimation:Temps: 3 semaines7. Intégration avec Kafka et MongoDBRequis:Configuration de Kafka et des topics nécessaires.Développement des producteurs Kafka pour envoyer des requêtes de l'API Gateway vers Kafka.Développement des consommateurs Kafka pour recevoir les notifications et les envoyer vers l'API Gateway.Gestion des offsets et des partitions pour garantir la résilience et la scalabilité.Mise en place des mécanismes de traitement des messages Kafka dans l'application Spring Boot.Scénarios spécifiques :Requête de l'API Gateway vers Kafka :Génération d'un identifiant unique pour chaque requête.Envoi de la requête à Kafka avec l'identifiant unique.Sauvegarde de l'identifiant dans MongoDB pour correspondance future.Notification de Kafka vers l'API Gateway :Réception des notifications via un topic dédié.Génération d'un identifiant pour chaque notification.Envoi de la notification à l'API Gateway avec l'identifiant.Sauvegarde de l'identifiant dans MongoDB pour correspondance future.Estimation:Temps: 4 semaines
+Requête de l'API Gateway vers Kafka :
+
+    Génération d'un identifiant unique pour chaque requête.
+    Envoi de la requête à Kafka avec l'identifiant unique.
+    Sauvegarde de l'identifiant dans MongoDB pour correspondance future.
+    Attente de l'accusé de réception via un autre topic Kafka.
+    Mise à jour de l'état de la requête dans MongoDB en fonction de l'accusé de réception.
+    Envoi d'un accusé de réception à l'API Gateway après traitement.
+
+Notification de Kafka vers l'API Gateway :
+
+    Réception des notifications via un topic dédié.
+    Génération d'un identifiant pour chaque notification.
+    Envoi de la notification à l'API Gateway avec l'identifiant.
+    Sauvegarde de l'identifiant dans MongoDB pour correspondance future.
+    Attente de la réponse de l'API Gateway.
+    Envoi de la réponse de l'API Gateway à un autre topic Kafka.
