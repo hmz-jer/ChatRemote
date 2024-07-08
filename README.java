@@ -1,11 +1,10 @@
-Bonjour à tous,
+ Demande de télétravail pendant les JO (29/07 - 09/08)
 
-Je tiens à vous informer que le problème de lenteur rencontré au niveau de la commande manage.sh status a été résolu.
+Bonjour [Nom du Manager],
 
-Nous avons remplacé l'utilisation de Kafka Admin par Kafka Metrics. Cette modification nous permet d'obtenir une réponse plus rapide et nous évite de créer un Kafka Admin à chaque exécution de la commande.
+Comme je ne suis pas en congé pendant la période des Jeux Olympiques, du 29 juillet au 9 août, je souhaiterais faire du télétravail afin de minimiser les perturbations liées à cet événement.
 
-Nous allons continuer à tester cette solution sur l'environnement de développement (DEV) afin de nous assurer de sa stabilité et de son efficacité avant de la livrer en production.
-
-Merci de votre patience et de votre compréhension.
+Merci de bien vouloir prendre en compte ma demande.
 
 Cordialement,
+  
