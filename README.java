@@ -1,10 +1,16 @@
- Demande de télétravail pendant les JO (29/07 - 09/08)
+#!/bin/bash
 
-Bonjour [Nom du Manager],
+# Configuration
+KAFKA_BIN_PATH="/path/to/kafka/bin"
+BROKER_LIST="localhost:9092"
+TOPIC="your-topic"
+MESSAGE="Votre message ici"
+NUM_MESSAGES=100  # Nombre de fois à envoyer le message
 
-Comme je ne suis pas en congé pendant la période des Jeux Olympiques, du 29 juillet au 9 août, je souhaiterais faire du télétravail afin de minimiser les perturbations liées à cet événement.
+# Envoyer le message plusieurs fois au sujet Kafka
+for ((i=1; i<=NUM_MESSAGES; i++))
+do
+  echo "$MESSAGE" | "$KAFKA_BIN_PATH/kafka-console-producer.sh" --broker-list "$BROKER_LIST" --topic "$TOPIC"
+done
 
-Merci de bien vouloir prendre en compte ma demande.
-
-Cordialement,
-  
+echo "Le message a été envoyé $NUM_MESSAGES fois à Kafka."
