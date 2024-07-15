@@ -1,63 +1,43 @@
- <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-
-    <parent>
-        <groupId>com.mycompany</groupId>
-        <artifactId>my-project</artifactId>
-        <version>1.0-SNAPSHOT</version>
-    </parent>
-
-    <artifactId>backend</artifactId>
-
-    <dependencies>
-        <!-- Spring Boot Dependencies -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- Spring Security Dependencies -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.ldap</groupId>
-            <artifactId>spring-ldap-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-ldap</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt</artifactId>
-            <version>0.9.1</version>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-</project>
+ Bonjour [Nom du destinataire],J'espère que vous allez bien.Je vous écris pour vous présenter la structure proposée pour notre projet utilisant Java 17 avec Spring Boot pour le backend et Angular pour le frontend. Voici un aperçu détaillé de l'architecture du projet, organisée avec Maven.Structure du ProjetLa structure du projet est divisée en deux modules principaux : le backend (Spring Boot) et le frontend (Angular). Voici la disposition générale des dossiers :my-project/
+│
+├── backend/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/
+│   │   │   │   └── com/
+│   │   │   │       └── mycompany/
+│   │   │   │           └── myproject/
+│   │   │   │               ├── controller/
+│   │   │   │               ├── service/
+│   │   │   │               ├── repository/
+│   │   │   │               ├── model/
+│   │   │   │               ├── security/
+│   │   │   │               ├── util/
+│   │   │   │               └── config/
+│   │   ├── resources/
+│   │       ├── application.properties
+│   │       └── static/
+│   │       └── templates/
+│   ├── test/
+│   │   ├── java/
+│   │       └── com/
+│   │           └── mycompany/
+│   │               └── myproject/
+│   ├── pom.xml
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── assets/
+│   │   ├── environments/
+│   │   ├── index.html
+│   │   ├── main.ts
+│   │   └── styles.css
+│   ├── angular.json
+│   ├── package.json
+│   ├── tsconfig.json
+│
+├── integration/
+│   └── manage.sh
+│
+└── pom.xmlDescription des Dossiersbackend/ : Contient le code source du backend utilisant Spring Boot.controller/ : Contient les contrôleurs REST.service/ : Contient les services métier.repository/ : Contient les interfaces de repository JPA.model/ : Contient les entités JPA.security/ : Contient les configurations et classes de sécurité pour LDAP et JWT.util/ : Contient les classes utilitaires, comme celles pour le format de date.config/ : Contient les configurations globales, comme la configuration LDAP.resources/ : Contient les fichiers de configuration et les ressources statiques.test/ : Contient les tests unitaires et d'intégration.frontend/ : Contient le code source du frontend utilisant Angular.src/ : Contient les fichiers source de l'application Angular.angular.json : Configuration du projet Angular.package.json : Dépendances et scripts npm.tsconfig.json : Configuration TypeScript.integration/ : Contient les scripts d'intégration, y compris manage.sh pour la gestion des opérations d'intégration.
