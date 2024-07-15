@@ -1,16 +1,40 @@
-#!/bin/bash
-
-# Configuration
-KAFKA_BIN_PATH="/path/to/kafka/bin"
-BROKER_LIST="localhost:9092"
-TOPIC="your-topic"
-MESSAGE="Votre message ici"
-NUM_MESSAGES=100  # Nombre de fois à envoyer le message
-
-# Envoyer le message plusieurs fois au sujet Kafka
-for ((i=1; i<=NUM_MESSAGES; i++))
-do
-  echo "$MESSAGE" | "$KAFKA_BIN_PATH/kafka-console-producer.sh" --broker-list "$BROKER_LIST" --topic "$TOPIC"
-done
-
-echo "Le message a été envoyé $NUM_MESSAGES fois à Kafka."
+ my-project/
+│
+├── backend/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/
+│   │   │   │   └── com/
+│   │   │   │       └── mycompany/
+│   │   │   │           └── myproject/
+│   │   │   │               ├── controller/
+│   │   │   │               ├── service/
+│   │   │   │               ├── repository/
+│   │   │   │               ├── model/
+│   │   │   │               ├── security/
+│   │   │   │               ├── util/
+│   │   │   │               └── config/
+│   │   │   ├── resources/
+│   │   │       ├── application.properties
+│   │   │       └── static/
+│   │   │       └── templates/
+│   │   ├── test/
+│   │       ├── java/
+│   │           └── com/
+│   │               └── mycompany/
+│   │                   └── myproject/
+│   ├── pom.xml
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── assets/
+│   │   ├── environments/
+│   │   ├── index.html
+│   │   ├── main.ts
+│   │   └── styles.css
+│   ├── angular.json
+│   ├── package.json
+│   ├── tsconfig.json
+│
+└── pom.xml
