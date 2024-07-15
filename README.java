@@ -1,40 +1,16 @@
- my-project/
-│
-├── backend/
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/
-│   │   │   │   └── com/
-│   │   │   │       └── mycompany/
-│   │   │   │           └── myproject/
-│   │   │   │               ├── controller/
-│   │   │   │               ├── service/
-│   │   │   │               ├── repository/
-│   │   │   │               ├── model/
-│   │   │   │               ├── security/
-│   │   │   │               ├── util/
-│   │   │   │               └── config/
-│   │   │   ├── resources/
-│   │   │       ├── application.properties
-│   │   │       └── static/
-│   │   │       └── templates/
-│   │   ├── test/
-│   │       ├── java/
-│   │           └── com/
-│   │               └── mycompany/
-│   │                   └── myproject/
-│   ├── pom.xml
-│
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   ├── assets/
-│   │   ├── environments/
-│   │   ├── index.html
-│   │   ├── main.ts
-│   │   └── styles.css
-│   ├── angular.json
-│   ├── package.json
-│   ├── tsconfig.json
-│
-└── pom.xml
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.mycompany</groupId>
+    <artifactId>my-project</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>backend</module>
+        <module>frontend</module>
+    </modules>
+</project>
