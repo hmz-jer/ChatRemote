@@ -1,4 +1,4 @@
-  package com.example.omc.config;
+   package com.example.omc.config;
 
 import com.unboundid.ldap.listener.InMemoryDirectoryServer;
 import com.unboundid.ldap.listener.InMemoryDirectoryServerConfig;
@@ -18,13 +18,26 @@ public class LdapInMemoryConfig {
         InMemoryDirectoryServer ds = new InMemoryDirectoryServer(config);
         ds.startListening();
 
-        // Ajout d'un utilisateur de test
+        // Ajouter d'abord les entrées parent
+        ds.add(new Entry("dn: dc=com",
+                "objectClass: domain",
+                "dc: com"));
+
+        ds.add(new Entry("dn: dc=example,dc=com",
+                "objectClass: domain",
+                "dc: example"));
+
+        ds.add(new Entry("dn: ou=users,dc=example,dc=com",
+                "objectClass: organizationalUnit",
+                "ou: users"));
+
+        // Maintenant, ajoutez l'utilisateur
         ds.add(new Entry("dn: uid=user,ou=users,dc=example,dc=com",
                 "objectClass: inetOrgPerson",
                 "uid: user",
                 "sn: User",
                 "cn: Test User",
-                "userPassword: {SSHA}2ZKPs8Xr4Xlm5oYPyfnRWQ=="));  // mot de passe "azerty" encodé en SSHA
+                "userPassword: {SSHA}6qVf5C2L3YfCqlG1c5G2A3S3A4S5V="));  // mot de passe "azerty" encodé en SSHA
 
         return ds;
     }
