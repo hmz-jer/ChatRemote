@@ -1,48 +1,45 @@
- import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
+  import org.springframework.ldap.core.LdapTemplate;
+import org.springframework.ldap.core.support.LdapContextSource;
+import org.springframework.ldap.filter.EqualsFilter;
+import org.springframework.ldap.filter.AndFilter;
 
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig {
+public class LdapConnectionTest {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .authorizeHttpRequests((requests) -> requests
-                .anyRequest().authenticated()
-            )
-            .formLogin((form) -> form
-                .loginPage("/login")
-                .permitAll()
-            )
-            .logout((logout) -> logout
-                .permitAll());
+    public static void main(String[] args) {
+        LdapContextSource contextSource = new LdapContextSource();
+        contextSource.setUrl("ldap://localhost:389");
+        contextSource.setBase("dc=interne,dc=cartes,dc=com");
+        contextSource.setUserDn("cn=admin,dc=interne,dc=cartes,dc=com");
+        contextSource.setPassword("admin_password");
+        
+        try {
+            contextSource.afterPropertiesSet();
 
-        return http.build();
-    }
+            LdapTemplate ldapTemplate = new LdapTemplate(contextSource);
 
-    @Bean
-    public void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth
-            .ldapAuthentication()
-                .userDnPatterns("uid={0},ou=users")
-                .groupSearchBase("ou=groups")
-                .contextSource()
-                    .url("ldap://localhost:389/dc=interne,dc=carte,dc=com")
-                    .and()
-                .passwordCompare()
-                    .passwordEncoder(passwordEncoder())
-                    .passwordAttribute("userPassword");
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+            // Test de connexion
+            boolean authenticated = ldapTemplate.authenticate("", "(uid=admin)", "admin_password");
+            
+            if (authenticated) {
+                System.out.println("Connexion LDAP réussie !");
+                
+                // Recherche d'informations sur l'utilisateur
+                AndFilter filter = new AndFilter();
+                filter.and(new EqualsFilter("uid", "admin"));
+                
+                ldapTemplate.search("", filter.encode(), (attrs) -> {
+                    System.out.println("Informations de l'utilisateur :");
+                    System.out.println("DN : " + attrs.getDn());
+                    System.out.println("CN : " + attrs.get("cn"));
+                    System.out.println("UID : " + attrs.get("uid"));
+                    return null;
+                });
+            } else {
+                System.out.println("Échec de l'authentification LDAP.");
+            }
+        } catch (Exception e) {
+            System.err.println("Erreur lors de la connexion LDAP : " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
