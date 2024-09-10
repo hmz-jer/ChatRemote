@@ -1,9 +1,13 @@
   import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.ldap.core.support.LdapContextSource;
 import org.springframework.ldap.filter.EqualsFilter;
-import org.springframework.ldap.filter.AndFilter;
 
-public class LdapConnectionTest {
+import javax.naming.directory.Attributes;
+import javax.naming.directory.BasicAttributes;
+import javax.naming.NamingEnumeration;
+import javax.naming.directory.Attribute;
+
+public class LdapUniqueMemberTest {
 
     public static void main(String[] args) {
         LdapContextSource contextSource = new LdapContextSource();
@@ -17,28 +21,26 @@ public class LdapConnectionTest {
 
             LdapTemplate ldapTemplate = new LdapTemplate(contextSource);
 
-            // Test de connexion
-            boolean authenticated = ldapTemplate.authenticate("", "(uid=admin)", "admin_password");
+            // Recherche du cn=admin dans ou=acc
+            String searchBase = "ou=acc";
+            EqualsFilter filter = new EqualsFilter("cn", "admin");
             
-            if (authenticated) {
-                System.out.println("Connexion LDAP réussie !");
-                
-                // Recherche d'informations sur l'utilisateur
-                AndFilter filter = new AndFilter();
-                filter.and(new EqualsFilter("uid", "admin"));
-                
-                ldapTemplate.search("", filter.encode(), (attrs) -> {
-                    System.out.println("Informations de l'utilisateur :");
-                    System.out.println("DN : " + attrs.getDn());
-                    System.out.println("CN : " + attrs.get("cn"));
-                    System.out.println("UID : " + attrs.get("uid"));
-                    return null;
-                });
-            } else {
-                System.out.println("Échec de l'authentification LDAP.");
-            }
+            ldapTemplate.search(searchBase, filter.encode(), (attrs) -> {
+                System.out.println("CN trouvé : " + attrs.getDn());
+                Attribute uniqueMembers = attrs.get("uniqueMember");
+                if (uniqueMembers != null) {
+                    NamingEnumeration<?> values = uniqueMembers.getAll();
+                    while (values.hasMore()) {
+                        System.out.println("UniqueMember : " + values.next());
+                    }
+                } else {
+                    System.out.println("Aucun uniqueMember trouvé.");
+                }
+                return null;
+            });
+
         } catch (Exception e) {
-            System.err.println("Erreur lors de la connexion LDAP : " + e.getMessage());
+            System.err.println("Erreur lors de la recherche LDAP : " + e.getMessage());
             e.printStackTrace();
         }
     }
