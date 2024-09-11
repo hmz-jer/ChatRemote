@@ -1,47 +1,43 @@
-  import org.springframework.ldap.core.LdapTemplate;
-import org.springframework.ldap.core.support.LdapContextSource;
-import org.springframework.ldap.filter.EqualsFilter;
+  version: '3'
 
-import javax.naming.directory.Attributes;
-import javax.naming.directory.BasicAttributes;
-import javax.naming.NamingEnumeration;
-import javax.naming.directory.Attribute;
+services:
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap
+    environment:
+      LDAP_ORGANISATION: "Organisation Interne Carte"
+      LDAP_DOMAIN: "interne.cartes.com"
+      LDAP_BASE_DN: "dc=interne,dc=cartes,dc=com"
+      LDAP_ADMIN_PASSWORD: "admin_password"
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
 
-public class LdapUniqueMemberTest {
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: myapp
+      MYSQL_USER: myuser
+      MYSQL_PASSWORD: mypassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
 
-    public static void main(String[] args) {
-        LdapContextSource contextSource = new LdapContextSource();
-        contextSource.setUrl("ldap://localhost:389");
-        contextSource.setBase("dc=interne,dc=cartes,dc=com");
-        contextSource.setUserDn("cn=admin,dc=interne,dc=cartes,dc=com");
-        contextSource.setPassword("admin_password");
-        
-        try {
-            contextSource.afterPropertiesSet();
+  phpldapadmin:
+    image: osixia/phpldapadmin:latest
+    container_name: phpldapadmin
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "openldap"
+      PHPLDAPADMIN_HTTPS: "false"
+    ports:
+      - "8080:80"
+    depends_on:
+      - openldap
 
-            LdapTemplate ldapTemplate = new LdapTemplate(contextSource);
-
-            // Recherche du cn=admin dans ou=acc
-            String searchBase = "ou=acc";
-            EqualsFilter filter = new EqualsFilter("cn", "admin");
-            
-            ldapTemplate.search(searchBase, filter.encode(), (attrs) -> {
-                System.out.println("CN trouvé : " + attrs.getDn());
-                Attribute uniqueMembers = attrs.get("uniqueMember");
-                if (uniqueMembers != null) {
-                    NamingEnumeration<?> values = uniqueMembers.getAll();
-                    while (values.hasMore()) {
-                        System.out.println("UniqueMember : " + values.next());
-                    }
-                } else {
-                    System.out.println("Aucun uniqueMember trouvé.");
-                }
-                return null;
-            });
-
-        } catch (Exception e) {
-            System.err.println("Erreur lors de la recherche LDAP : " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-}
+volumes:
+  mysql_data:
