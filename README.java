@@ -1,4 +1,72 @@
-  Dans PostgreSQL, utiliser une colonne VARCHAR comme clé primaire est fonctionnellement correct, mais il y a quelques points à considérer qui pourraient justifier l'ajout d'un id de type INT en tant que clé primaire.Avantages d'ajouter un ID de type INT comme clé primaire :Performance :Un INT est plus rapide à comparer et à indexer qu'un VARCHAR. Les index sur des colonnes de type VARCHAR peuvent être plus coûteux en termes de performance, surtout si la longueur de la chaîne de caractères est importante.Si la table devient volumineuse, l'utilisation d'une clé primaire entière optimisera les performances des requêtes, des index et des jointures.Taille des index :Les index sur les colonnes INT occupent moins d'espace disque que les index sur les colonnes VARCHAR, surtout si la colonne de chaîne est relativement longue. Cela permet également d'améliorer la vitesse des recherches indexées.Flexibilité et Maintenance :Si, pour une raison ou une autre, la valeur de la colonne VARCHAR change, cela peut entraîner des mises à jour coûteuses sur toute la base de données. Avec un identifiant de type INT, la clé primaire reste stable, même si d'autres colonnes doivent être modifiées.Bonne pratique :De manière générale, l'utilisation d'un identifiant entier comme clé primaire est une bonne pratique car il simplifie la gestion des relations et des index.Ce que tu pourrais faire :Ajouter une colonne id de type SERIAL ou BIGSERIAL comme clé primaire.Garder la colonne VARCHAR avec une contrainte UNIQUE pour assurer l'unicité des valeurs, mais éviter qu'elle soit la clé primaire.
+# Racine de l'organisation
+dn: dc=interne,dc=cartes,dc=com
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: Interne Cartes
+dc: interne
 
+# Unité organisationnelle pour les utilisateurs
+dn: ou=users,dc=interne,dc=cartes,dc=com
+objectClass: organizationalUnit
+ou: users
 
-    Utiliser le même nom pour une colonne et une table n'est généralement pas recommandé pour plusieurs raisons, même si cela est techniquement possible dans PostgreSQL. Voici pourquoi il est préférable d'éviter cette pratique :Raisons d'éviter d'avoir le même nom pour une table et une colonne :Ambiguïté dans les requêtes :Dans les requêtes SQL complexes avec plusieurs tables et jointures, cela peut créer de la confusion et rendre le code plus difficile à lire et à maintenir. Par exemple, quand vous utilisez une jointure ou une sous-requête, vous devrez souvent désambiguïser le nom de la colonne avec le nom de la table, ce qui rend le code moins lisible.SELECT table_name.table_name FROM table_name; -- Peut prêter à confusionLisibilité et maintenance :Utiliser un nom unique et explicite pour les colonnes et les tables rend votre code plus clair et facile à maintenir à long terme. Cela permet aussi à d'autres développeurs (ou vous-même plus tard) de comprendre plus facilement les requêtes sans ambiguïté.Compatibilité avec d'autres bases de données :Certaines bases de données ou outils pourraient avoir des difficultés à interpréter des noms identiques pour une table et une colonne. Même si PostgreSQL le permet, ce n'est pas toujours le cas pour d'autres systèmes de gestion de bases de données.Conventions de nommage :Il est souvent recommandé de suivre une convention de nommage claire où les noms de colonnes sont descriptifs de leur contenu ou de leur rôle dans la table. Cela permet d'éviter toute confusion et d'améliorer la compréhension des données stockées.Ce que tu peux faire :Si tu veux utiliser un nom similaire, tu peux légèrement modifier le nom de la colonne pour qu'il soit plus descriptif. Par exemple, si le nom de la table est users, tu pourrais appeler la colonne username ou user_id au lieu de simplement users.Conclusion :Il est préférable d'éviter d'avoir une colonne portant le même nom que la table. Opter pour des noms de colonnes plus explicites améliorera la lisibilité et la maintenabilité de vos requêtes, tout en réduisant les risques d'ambiguïté ou de bugs.
+# Unité organisationnelle pour les groupes
+dn: ou=groups,dc=interne,dc=cartes,dc=com
+objectClass: organizationalUnit
+ou: groups
+
+# Utilisateur Admin
+dn: cn=admin,dc=interne,dc=cartes,dc=com
+objectClass: simpleSecurityObject
+objectClass: organizationalRole
+cn: admin
+description: LDAP administrator
+userPassword: {SSHA}UCPz/VK/wavAeAP090jYvEWqJnrHBArK
+
+# Utilisateur 1
+dn: uid=user1,ou=users,dc=interne,dc=cartes,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: user1
+cn: User One
+sn: One
+givenName: User
+userPassword: {SSHA}5SyXYOXEzxc91m3ZbvMA2VUDxQL8BcUC
+loginShell: /bin/bash
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/user1
+mail: user1@interne.cartes.com
+
+# Utilisateur 2
+dn: uid=user2,ou=users,dc=interne,dc=cartes,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: user2
+cn: User Two
+sn: Two
+givenName: User
+userPassword: {SSHA}5SyXYOXEzxc91m3ZbvMA2VUDxQL8BcUC
+loginShell: /bin/bash
+uidNumber: 10001
+gidNumber: 10000
+homeDirectory: /home/user2
+mail: user2@interne.cartes.com
+
+# Groupe Utilisateurs
+dn: cn=users,ou=groups,dc=interne,dc=cartes,dc=com
+objectClass: posixGroup
+cn: users
+gidNumber: 10000
+memberUid: user1
+memberUid: user2
+
+# Groupe Administrateurs
+dn: cn=admins,ou=groups,dc=interne,dc=cartes,dc=com
+objectClass: posixGroup
+cn: admins
+gidNumber: 10001
+memberUid: user1
