@@ -1,4 +1,4 @@
-ldapmodify -x -D "cn=admin,dc=interne,dc=cartes,dc=com" -W -H ldap:/// << EOF
+ldapmodify -Y EXTERNAL -H ldapi:/// << EOF
 dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 replace: olcAccess
