@@ -10,19 +10,30 @@ public void testGoodMessage() {
         // autres octets...
     };
 
-    // Création d'un buffer direct non sécurisé avec une capacité de 256 octets
-    ByteBuf buf = Unpooled.directBuffer(256);
-
-    // Écriture des données dans le buffer
+    // Écrire dans le canal avec un buffer non sécurisé
     channel.writeInbound(Unpooled.wrappedBuffer(openREQ));
-    
-    ByteBuf message = (ByteBuf) channel.readOutbound();
-    message.readBytes(buf);  // Lire dans le buffer direct avec la capacité ajustée
 
-    // Extraction des données du buffer pour comparaison
-    byte[] bufArray = new byte[buf.readableBytes()];
-    buf.readBytes(bufArray);
+    // Lire tous les messages sortants dans outboundMessages
+    List<ByteBuf> outboundBuffers = new ArrayList<>();
+    ByteBuf outboundMessage;
+    while ((outboundMessage = (ByteBuf) channel.readOutbound()) != null) {
+        outboundBuffers.add(outboundMessage);
+    }
 
-    // Comparaison des tableaux d'octets
+    // Agrégation ou traitement des messages
+    ByteBuf aggregatedBuffer = Unpooled.buffer();
+    for (ByteBuf buf : outboundBuffers) {
+        aggregatedBuffer.writeBytes(buf);
+        buf.release();  // Libérer la mémoire après utilisation
+    }
+
+    // Convertir le buffer agrégé en tableau d'octets pour comparaison
+    byte[] bufArray = new byte[aggregatedBuffer.readableBytes()];
+    aggregatedBuffer.readBytes(bufArray);
+
+    // Libérer le buffer agrégé
+    aggregatedBuffer.release();
+
+    // Comparer avec le tableau attendu
     Assert.assertArrayEquals(expectedOpenConf, bufArray);
 }
