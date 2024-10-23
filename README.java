@@ -1,85 +1,28 @@
- import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import org.junit.Before;
-import org.junit.Test;
+ @Test
+public void testGoodMessage() {
+    byte[] openREQ = new byte[] {
+        0x36, 0x00, 0x00, (byte) 0x80, 0x00, 0x2F, // Frame size
+        // autres octets...
+    };
 
-import java.io.BufferedReader;
-import java.io.StringReader;
-import java.util.Properties;
+    byte[] expectedOpenConf = new byte[] {
+        0x36, 0x00, 0x00, (byte) 0x80, 0x00, 0x35, // Frame size
+        // autres octets...
+    };
 
-import static org.junit.Assert.*;
+    // Création d'un buffer direct non sécurisé avec une capacité de 256 octets
+    ByteBuf buf = Unpooled.directBuffer(256);
 
-public class DictionnaryTest {
+    // Écriture des données dans le buffer
+    channel.writeInbound(Unpooled.wrappedBuffer(openREQ));
+    
+    ByteBuf message = (ByteBuf) channel.readOutbound();
+    message.readBytes(buf);  // Lire dans le buffer direct avec la capacité ajustée
 
-    private Dictionnary dictionnary;
+    // Extraction des données du buffer pour comparaison
+    byte[] bufArray = new byte[buf.readableBytes()];
+    buf.readBytes(bufArray);
 
-    @Before
-    public void setUp() {
-        dictionnary = new Dictionnary();
-    }
-
-    @Test
-    public void testInitFromFile() throws Exception {
-        String jsonContent = "{ \"id\": \"field1\", \"technical\": true, \"children\": [\"child1\", \"child2\"] }";
-        BufferedReader reader = new BufferedReader(new StringReader(jsonContent));
-
-        JsonElement jsonElement = new JsonParser().parse(reader);
-        JsonObject jsonObject = jsonElement.getAsJsonObject();
-        
-        // Validation that JSON parsing works as expected
-        assertNotNull(jsonObject);
-        assertEquals("field1", jsonObject.get("id").getAsString());
-        assertTrue(jsonObject.get("technical").getAsBoolean());
-
-        reader.close();
-    }
-
-    @Test
-    public void testInitFromProperties() {
-        Properties properties = new Properties();
-        properties.put("field1", "tag1");
-        properties.put("field2", "tag2");
-
-        Dictionnary dictionnary = Dictionnary.initFromProperties(properties);
-
-        assertEquals("tag1", dictionnary.toTag("field1"));
-        assertEquals("field1", dictionnary.toFieldName("tag1"));
-    }
-
-    @Test
-    public void testToTag() {
-        dictionnary.dictionary.put("field1", "tag1");
-        assertEquals("tag1", dictionnary.toTag("field1"));
-    }
-
-    @Test
-    public void testToFieldName() {
-        dictionnary.reverseDictionary.put("tag1", "field1");
-        assertEquals("field1", dictionnary.toFieldName("tag1"));
-    }
-
-    @Test
-    public void testIsStruct() {
-        dictionnary.structures.put("tag1", null);
-        assertTrue(dictionnary.isStruct("tag1"));
-        assertFalse(dictionnary.isStruct("tag2"));
-    }
-
-    @Test
-    public void testIsTechnical() {
-        dictionnary.technicalFields.add("field1");
-        assertTrue(dictionnary.isTechnical("field1"));
-        assertFalse(dictionnary.isTechnical("field2"));
-    }
-
-    @Test
-    public void testGetChilds() {
-        dictionnary.structures.put("tag1", new HashSet<>(Arrays.asList("child1", "child2")));
-        Set<String> childs = dictionnary.getChilds("tag1");
-
-        assertNotNull(childs);
-        assertTrue(childs.contains("child1"));
-        assertTrue(childs.contains("child2"));
-    }
+    // Comparaison des tableaux d'octets
+    Assert.assertArrayEquals(expectedOpenConf, bufArray);
 }
