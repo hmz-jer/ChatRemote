@@ -1,60 +1,84 @@
-    import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
+    import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.logging.Logger;
 
-public class SecureFileReader {
+public class SystemPropertiesManager {
+    private static final Logger LOGGER = Logger.getLogger(SystemPropertiesManager.class.getName());
     
-    private static final String VALID_FILE_PATH_PATTERN = "^[a-zA-Z0-9/_.-]+$";
-    private static final String BASE_DIRECTORY = "/chemin/vers/repertoire/autorise";
+    // Constantes pour les noms de propriétés
+    private static final String PROXY_HOST_PROPERTY = "http.proxyHost";
+    private static final String PROXY_PORT_PROPERTY = "http.proxyPort";
+    private static final String SYSTEM_PROXY_PROPERTY = "java.net.useSystemProxies";
     
-    public static List<String> readFileSecurely(String fileName) throws IOException {
-        // Validation du nom de fichier
-        if (!isValidFileName(fileName)) {
-            throw new IllegalArgumentException("Nom de fichier invalide");
+    // Patterns de validation
+    private static final Pattern HOST_PATTERN = Pattern.compile("^[a-zA-Z0-9.-]+$");
+    private static final Pattern PORT_PATTERN = Pattern.compile("^\\d{1,5}$");
+    
+    public static void setProxyProperties(InetSocketAddress addr) {
+        if (addr == null) {
+            LOGGER.warning("Tentative de définition de propriétés proxy avec une adresse null");
+            return;
         }
 
-        // Construction du chemin sécurisé
-        Path normalizedPath = Paths.get(BASE_DIRECTORY, fileName).normalize();
-        if (!normalizedPath.startsWith(BASE_DIRECTORY)) {
-            throw new SecurityException("Tentative d'accès à un répertoire non autorisé");
-        }
+        String host = addr.getHostName();
+        String port = Integer.toString(addr.getPort());
 
-        File file = normalizedPath.toFile();
-        List<String> lines = new ArrayList<>();
+        if (isValidHostName(host) && isValidPort(port)) {
+            setValidatedProperty(PROXY_HOST_PROPERTY, host);
+            setValidatedProperty(PROXY_PORT_PROPERTY, port);
+        } else {
+            LOGGER.severe("Tentative de définition de propriétés proxy avec des valeurs invalides");
+            throw new SecurityException("Valeurs de proxy invalides");
+        }
+    }
+    
+    public static void setSystemProxyEnabled(boolean enabled) {
+        setValidatedProperty(SYSTEM_PROXY_PROPERTY, Boolean.toString(enabled));
+    }
+    
+    private static void setValidatedProperty(String key, String value) {
+        // Vérification des clés autorisées
+        if (!isAllowedPropertyKey(key)) {
+            LOGGER.severe("Tentative de modification d'une propriété système non autorisée: " + key);
+            throw new SecurityException("Propriété système non autorisée");
+        }
         
-        // Utilisation de try-with-resources pour fermer automatiquement les ressources
-        try (BufferedReader reader = new BufferedReader(
-                new FileReader(file, StandardCharsets.UTF_8))) {
-            
-            String line;
-            while ((line = reader.readLine()) != null) {
-                lines.add(line);
+        // Validation supplémentaire selon le type de propriété
+        if (PROXY_HOST_PROPERTY.equals(key)) {
+            if (!isValidHostName(value)) {
+                throw new SecurityException("Nom d'hôte proxy invalide");
             }
-            return lines;
+        } else if (PROXY_PORT_PROPERTY.equals(key)) {
+            if (!isValidPort(value)) {
+                throw new SecurityException("Port proxy invalide");
+            }
         }
-    }
-    
-    private static boolean isValidFileName(String fileName) {
-        return fileName != null 
-            && !fileName.isEmpty() 
-            && fileName.matches(VALID_FILE_PATH_PATTERN);
-    }
-    
-    // Exemple d'utilisation
-    public static void main(String[] args) {
+        
+        // Application de la propriété après validation
         try {
-            List<String> contenu = readFileSecurely("mon_fichier.txt");
-            contenu.forEach(System.out::println);
-        } catch (IOException e) {
-            System.err.println("Erreur lors de la lecture du fichier: " + e.getMessage());
+            System.setProperty(key, value);
         } catch (SecurityException e) {
-            System.err.println("Erreur de sécurité: " + e.getMessage());
+            LOGGER.severe("Erreur lors de la définition de la propriété système: " + e.getMessage());
+            throw e;
         }
+    }
+    
+    private static boolean isAllowedPropertyKey(String key) {
+        return PROXY_HOST_PROPERTY.equals(key) ||
+               PROXY_PORT_PROPERTY.equals(key) ||
+               SYSTEM_PROXY_PROPERTY.equals(key);
+    }
+    
+    private static boolean isValidHostName(String host) {
+        return host != null && HOST_PATTERN.matcher(host).matches();
+    }
+    
+    private static boolean isValidPort(String port) {
+        if (port != null && PORT_PATTERN.matcher(port).matches()) {
+            int portNum = Integer.parseInt(port);
+            return portNum > 0 && portNum <= 65535;
+        }
+        return false;
     }
 }
