@@ -1,38 +1,35 @@
-# Générer la clé privée du CA
-openssl req -new -x509 -keyout ca.key -out ca.crt -days 365 -subj "/CN=ca.test.com" -passin pass:azerty -passout pass:azerty
+version: '3'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
 
-# Créer le keystore du serveur
-keytool -keystore kafka.server.keystore.jks -alias server -validity 365 -genkey -keyalg RSA -storepass azerty -keypass azerty -dname "CN=localhost" -storetype pkcs12
-
-# Créer une demande de signature de certificat (CSR)
-keytool -keystore kafka.server.keystore.jks -alias server -certreq -file server.csr -storepass azerty -keypass azerty
-
-# Signer le certificat serveur avec le CA
-openssl x509 -req -CA ca.crt -CAkey ca.key -in server.csr -out server.crt -days 365 -CAcreateserial -passin pass:azerty
-
-# Importer le certificat CA dans le keystore serveur
-keytool -keystore kafka.server.keystore.jks -alias CARoot -import -file ca.crt -storepass azerty -noprompt
-
-# Importer le certificat serveur signé dans le keystore serveur
-keytool -keystore kafka.server.keystore.jks -alias server -import -file server.crt -storepass azerty -noprompt
-
-# Créer le truststore et importer le certificat CA
-keytool -keystore kafka.server.truststore.jks -alias CARoot -import -file ca.crt -storepass azerty -noprompt -storetype pkcs12
-
-# Créer le keystore client
-keytool -keystore kafka.client.keystore.jks -alias client -validity 365 -genkey -keyalg RSA -storepass azerty -keypass azerty -dname "CN=client.test.com" -storetype pkcs12
-
-# Créer une demande de signature de certificat pour le client
-keytool -keystore kafka.client.keystore.jks -alias client -certreq -file client.csr -storepass azerty -keypass azerty
-
-# Signer le certificat client avec le CA
-openssl x509 -req -CA ca.crt -CAkey ca.key -in client.csr -out client.crt -days 365 -CAcreateserial -passin pass:azerty
-
-# Importer le certificat CA dans le keystore client
-keytool -keystore kafka.client.keystore.jks -alias CARoot -import -file ca.crt -storepass azerty -noprompt
-
-# Importer le certificat client signé dans le keystore client
-keytool -keystore kafka.client.keystore.jks -alias client -import -file client.crt -storepass azerty -noprompt
-
-# Créer le truststore client et importer le certificat CA
-keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca.crt -storepass azerty -noprompt -storetype pkcs12
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: SSL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: SSL://localhost:9093
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.server.keystore.jks
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: keystore_creds
+      KAFKA_SSL_KEY_CREDENTIALS: key_creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.server.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: truststore_creds
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SECURITY_PROTOCOL: SSL
+      KAFKA_INTER_BROKER_LISTENER_NAME: SSL
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - ./certs:/etc/kafka/secrets
