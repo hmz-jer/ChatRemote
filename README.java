@@ -1,8 +1,14 @@
-security.protocol=SSL
-ssl.truststore.location=./certs/kafka.client.truststore.jks
-ssl.truststore.password=azerty
-ssl.keystore.location=./certs/kafka.client.keystore.jks
-ssl.keystore.password=azerty
-ssl.key.password=azerty
+# Créer le keystore client en spécifiant explicitement PKCS12
+keytool -keystore kafka.client.keystore.jks -alias client -validity 365 -genkey -keyalg RSA -storepass azerty -keypass azerty -dname "CN=client-test-local" -storetype PKCS12
 
-  kafka-topics.sh --create --bootstrap-server localhost:9093 --command-config client-ssl.properties --replication-factor 1 --partitions 1 --topic test-topic
+# Créer la demande de signature
+keytool -keystore kafka.client.keystore.jks -alias client -certreq -file client.csr -storepass azerty -keypass azerty -storetype PKCS12
+
+# Signer avec le CA
+openssl x509 -req -CA ca.crt -CAkey ca.key -in client.csr -out client.crt -days 365 -CAcreateserial -passin pass:azerty
+
+# Importer le certificat CA dans le keystore client
+keytool -keystore kafka.client.keystore.jks -alias CARoot -import -file ca.crt -storepass azerty -noprompt -storetype PKCS12
+
+# Importer le certificat client signé
+keytool -keystore kafka.client.keystore.jks -alias client -import -file client.crt -storepass azerty -noprompt -storetype PKCS12
