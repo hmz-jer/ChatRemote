@@ -1,494 +1,219 @@
-# HISTORIQUE DES VERSIONS DU DOCUMENT
+**Normes de développement Java pour l'entreprise**
 
-Version 2.0 - Mise à jour pour Java 17 LTS
-Dernière modification : 05/02/2025
+## 1. Langage Java J2E
 
-# 1. LANGAGE JAVA 17
-
-## 1.1. Organisation des fichiers
-
-### 1.1.1. Les fichiers sources Java
-- Extension `.java` obligatoire
-- Un fichier par classe publique
-- Nom du fichier identique au nom de la classe publique
-- Structure de packages cohérente reflétant la hiérarchie du projet
-- Organisation en modules avec `module-info.java` à la racine
-- Respect des conventions Maven/Gradle pour la structure du projet :
-  ```
-  src/
-    main/
-      java/
-        module-info.java
-        com/
-          company/
-            project/
-    test/
-      java/
-        com/
-          company/
-            project/
-  ```
-
-## 1.2. Exemple de code moderne
-```java
-// Exemple d'utilisation des fonctionnalités modernes de Java 17
-public sealed interface Shape permits Circle, Rectangle {
-    double area();
-}
-
-public record Circle(double radius) implements Shape {
-    public Circle {
-        if (radius < 0) {
-            throw new IllegalArgumentException("Radius must be positive");
-        }
-    }
-
-    @Override
-    public double area() {
-        return Math.PI * radius * radius;
-    }
-}
-
-public record Rectangle(double width, double height) implements Shape {
-    public Rectangle {
-        if (width < 0 || height < 0) {
-            throw new IllegalArgumentException("Dimensions must be positive");
-        }
-    }
-
-    @Override
-    public double area() {
-        return width * height;
-    }
-}
+### 1.1 Organisation des fichiers
+#### 1.1.1 Les fichiers sources Java
+- Les fichiers sources Java doivent être bien organisés dans une hiérarchie de packages respectant la convention : **com.entreprise.projet.module**.
+- Chaque fichier doit correspondre à une seule classe publique, et le nom du fichier doit refléter le nom de la classe.
+- Exemple de hiérarchie de fichiers :
+```
+com
+└── entreprise
+    └── projet
+        ├── service
+        │   └── ServiceExample.java
+        ├── model
+        │   └── ExampleModel.java
+        └── util
+            └── ExampleUtils.java
 ```
 
-## 1.3. Organisation d'un fichier
-
-### 1.3.1. Les Directives de nommage
-- Packages: minuscules, sans underscore (`com.entreprise.projet`)
-- Classes: PascalCase (`UserService`)
-- Interfaces: PascalCase (`Printable`)
-- Méthodes: camelCase (`calculateTotal`)
-- Variables: camelCase (`userName`)
-- Constants: SNAKE_CASE majuscule (`MAX_CONNECTIONS`)
-- Modules: minuscules, avec points (`com.entreprise.core`)
-
-## 1.4. Les commentaires
-
-### 1.4.1. Rédaction de commentaires sur les documents
+### 1.2 Exemple de code
 ```java
+package com.entreprise.projet.module;
+
 /**
- * Service responsable de la gestion des utilisateurs.
- * Implémente les opérations CRUD et la logique métier associée.
- *
- * @author Équipe Backend
- * @version 2.0
- * @since 17
+ * Exemple de classe démontrant les bonnes pratiques de développement.
  */
-@ThreadSafe
-public final class UserService {
-    // Implémentation
-}
-```
-
-### 1.4.2. Descriptions
-Les commentaires doivent être :
-- Clairs et concis
-- En français ou en anglais (cohérence dans le projet)
-- Pertinents et à jour
-- Focalisés sur le "pourquoi" plutôt que le "comment"
-
-### 1.4.3. Conventions et ordre des balises
-1. Description générale
-2. @param
-3. @return
-4. @throws
-5. @since
-6. @deprecated (si applicable)
-7. @author (optionnel)
-8. @see (optionnel)
-
-### 1.4.4. Exemple de code avec des commentaires
-```java
-/**
- * Gère les opérations de paiement de manière thread-safe.
- * Utilise le pattern Strategy pour supporter différents processeurs de paiement.
- */
-public sealed interface PaymentOperation 
-    permits CreditCardPayment, BankTransfer {
-    
+public class Exemple {
     /**
-     * Exécute l'opération de paiement.
-     *
-     * @param amount montant à traiter
-     * @return résultat de l'opération contenant l'ID de transaction
-     * @throws InsufficientFundsException si le solde est insuffisant
-     * @throws PaymentProcessingException en cas d'erreur technique
-     * @since 17
+     * Méthode principale du programme.
+     * @param args Arguments de la ligne de commande
      */
-    TransactionResult execute(BigDecimal amount);
-}
-```
-
-## 1.5. Indentation
-
-### 1.5.1. Longueur d'une ligne
-- Maximum 120 caractères
-- Préférer des lignes plus courtes pour la lisibilité
-- Indentation de 4 espaces (pas de tabulations)
-- Alignement cohérent des paramètres
-
-```java
-// Bon exemple de formatage
-public record CustomerProfile(
-    String id,
-    String firstName,
-    String lastName,
-    String email,
-    LocalDate birthDate
-) {
-    public CustomerProfile {
-        Objects.requireNonNull(id, "ID cannot be null");
-        Objects.requireNonNull(email, "Email cannot be null");
+    public static void main(String[] args) {
+        System.out.println("Bonjour, entreprise !");
     }
 }
 ```
 
-### 1.5.2. Expressions nécessitant plusieurs lignes
-```java
-// Exemple avec text blocks pour SQL
-String query = """
-    SELECT u.id, u.name,
-           u.email, u.status,
-           COUNT(o.id) as order_count
-    FROM users u
-    LEFT JOIN orders o ON u.id = o.user_id
-    WHERE u.status = 'ACTIVE'
-    GROUP BY u.id, u.name, u.email, u.status
-    HAVING COUNT(o.id) > 0
-    """;
+### 1.3 Organisation d’un fichier
+#### 1.3.1 Les Directives de nommage
+- **Classes** : UpperCamelCase
+- **Interfaces** : commencent par un **I** (ex: `IService`)
+- **Variables et méthodes** : lowerCamelCase
+- **Constantes** : UPPER_CASE
 
-// Chaînage de méthodes
-List<String> activeUsers = users.stream()
-    .filter(user -> user.isActive())
-    .map(User::getName)
-    .sorted()
-    .collect(Collectors.toList());
+### 1.4 Les commentaires
+#### 1.4.1 Rédaction de commentaires sur les documents
+- Tous les fichiers doivent contenir un en-tête avec des informations sur l’auteur, la date, et une description :
+```java
+/**
+ * Classe démonstrative pour l'entreprise.
+ * 
+ * Auteur : John Doe
+ * Date : 05/02/2025
+ */
 ```
+#### 1.4.2 Descriptions
+- Chaque classe et méthode publique doit inclure des descriptions via JavaDoc pour expliquer leur rôle.
 
-## 1.6. Lignes blanches
+#### 1.4.3 Conventions et ordre des balises
+- Respecter cet ordre dans les JavaDocs :
+  - Description générale
+  - `@param` pour les paramètres
+  - `@return` pour la valeur retournée
+  - `@throws` pour les exceptions
 
-### 1.6.1. Les espaces
-- Une ligne vide entre les méthodes
-- Une ligne vide après les blocs d'imports
-- Une ligne vide entre les classes
-- Pas de lignes vides excessives
-- Regroupement logique des imports
-
+#### 1.4.4 Exemple de code avec des commentaires
 ```java
-package com.company.project;
-
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.Objects;
-import java.util.Optional;
-
-import com.company.project.model.User;
-import com.company.project.service.UserService;
-
-public final class UserManager {
-    private final UserService userService;
-    
-    public UserManager(UserService userService) {
-        this.userService = Objects.requireNonNull(userService);
-    }
-    
-    public Optional<User> findActiveUser(String id) {
-        return userService.findById(id)
-            .filter(User::isActive);
-    }
+/**
+ * Multiplie deux nombres entiers.
+ * 
+ * @param a Premier entier
+ * @param b Deuxième entier
+ * @return Le produit des deux entiers
+ */
+public int multiplier(int a, int b) {
+    return a * b;
 }
 ```
 
-## 1.7. Codage sécurisé
+### 1.5 Indentation
+#### 1.5.1 Longueur d’une ligne
+- Limiter la longueur d’une ligne de code à 120 caractères pour une meilleure lisibilité.
 
-### 1.7.1. Guide du codage sécurisé
-Principes fondamentaux :
-- Validation des entrées
-- Principe du moindre privilège
-- Defense en profondeur
-- Fail-safe defaults
-- Économie de mécanisme
-
-### 1.7.2. Directives de codage sécurisé pour Java SE
-
-#### 1.7.2.1. Déni de Service (DOS)
-
-★★★☆ **Guideline 1-1 / DOS-1**: Attention aux activités pouvant utiliser des ressources disproportionnées
+#### 1.5.2 Expressions nécessitant plusieurs lignes
+- Utiliser une indentation appropriée pour les expressions complexes :
 ```java
-public class ResourceManager {
-    private static final int MAX_BUFFER_SIZE = 8192;
-    private static final int MAX_ARRAY_SIZE = 1000000;
+String result = condition ? "Valeur 1" :
+                  "Valeur 2";
+```
 
-    // Bon exemple
-    public byte[] processData(byte[] input) {
-        if (input.length > MAX_BUFFER_SIZE) {
-            throw new IllegalArgumentException("Input too large");
-        }
-        return Arrays.copyOf(input, input.length);
-    }
+### 1.6 Lignes blanches
+#### 1.6.1 Les espaces
+- Ajouter une ligne blanche entre les différentes sections logiques du code pour une meilleure clarté.
+
+### 1.7 Codage sécurisé
+#### 1.7.1 Guide du codage sécurisé
+##### 1.7.1.1 Gestion des ressources
+- **DOS-1** : Soyez vigilant avec les activités consommant des ressources disproportionnées.
+- **DOS-2** : Libérez systématiquement les ressources dans tous les cas.
+- **DOS-3** : Assurez-vous que les vérifications des limites des ressources ne provoquent pas de dépassements.
+
+##### 1.7.1.2 Information confidentielle
+- **CONFIDENTIAL-1** : Purgez les informations sensibles des exceptions.
+- **CONFIDENTIAL-2** : Ne journalisez jamais d'informations hautement sensibles.
+- **CONFIDENTIAL-3** : Envisagez de purger la mémoire contenant des données sensibles après utilisation.
+
+##### 1.7.1.3 Injection et inclusion
+- **INJECT-1** : Générez des formats valides pour les entrées utilisateurs.
+- **INJECT-2** : Évitez les requêtes SQL dynamiques.
+- **INJECT-3** : Prenez soin lors de la génération d'XML et HTML.
+- **INJECT-4** : Ne faites jamais confiance aux données passées via la ligne de commande.
+- **INJECT-5** : Restreignez l'inclusion XML.
+
+##### 1.7.1.4 Entrées utilisateur (INPUT)
+- **INPUT-1** : Validez toutes les entrées utilisateur avant traitement.
+- **INPUT-2** : Évitez les injections de commande en limitant les caractères spéciaux.
+- **INPUT-3** : Utilisez des librairies standard pour parser les données utilisateur (ex : Jackson pour JSON).
+
+##### 1.7.1.5 Objets Mutables (MUTABLE)
+- **MUTABLE-1** : Réduisez l'accès aux champs d’instance mutables en les rendant privés.
+- **MUTABLE-2** : Utilisez des objets immuables autant que possible, par exemple avec les `record` en Java 17.
+- **MUTABLE-3** : Clonez les objets mutables avant de les exposer.
+
+##### 1.7.1.6 Objets (OBJECT)
+- **OBJECT-1** : Redéfinissez toujours `equals` et `hashCode` ensemble pour assurer la cohérence.
+- **OBJECT-2** : Évitez de référencer des objets supprimés pour prévenir les fuites mémoire.
+- **OBJECT-3** : Utilisez `try-with-resources` pour gérer les objets implémentant `AutoCloseable`.
+- **OBJECT-4** : Limitez l'exposition des instances de `ClassLoader`. Ne chargez que les classes strictement nécessaires pour éviter des vulnérabilités de type ClassLoader hijacking.
+- **OBJECT-5** : Limitez l'extensibilité des classes et des méthodes pour empêcher des comportements inattendus dans les sous-classes.
+
+##### 1.7.1.7 Sérialisation (SERIAL)
+- **SERIAL-1** : Évitez la sérialisation native Java, utilisez des bibliothèques modernes comme Jackson ou Gson.
+- **SERIAL-2** : Implémentez une validation personnalisée lors de la désérialisation.
+- **SERIAL-3** : N’exposez jamais directement des données sensibles via des objets sérialisés.
+- **SERIAL-4** : Assurez-vous que les classes sérialisées implémentent l'interface `Serializable` de manière cohérente.
+- **SERIAL-5** : Redéfinissez la méthode `readObject` pour protéger contre des données manipulées.
+
+##### 1.7.1.8 Accessibilité et extensibilité (ACCESS)
+- **ACCESS-1** : Limitez l'accessibilité des classes, interfaces, méthodes et champs au minimum nécessaire.
+- **ACCESS-2** : Évitez l'accès public ou protégé à des champs mutables.
+- **ACCESS-3** : Utilisez les annotations comme `@Deprecated` pour indiquer les API obsolètes.
+- **ACCESS-4** : Restreignez l'accès aux classes internes pour éviter des abus potentiels.
+
+#### 1.7.2 Directives de codage sécurisé pour Java SE
+##### 1.7.2.1 Expressions modernes
+- **Utilisez le switch amélioré** (Java 17) pour améliorer la lisibilité :
+```java
+String result = switch (day) {
+    case MONDAY, FRIDAY, SUNDAY -> "Weekend";
+    case TUESDAY -> "Busy day";
+    default -> "Regular day";
+};
+```
+
+##### 1.7.2.2 Gestion de la mémoire
+- Utilisez des outils modernes comme `try-with-resources` pour éviter les fuites de ressources.
+```java
+try (BufferedReader br = new BufferedReader(new FileReader("file.txt"))) {
+    System.out.println(br.readLine());
+} catch (IOException e) {
+    e.printStackTrace();
 }
 ```
 
-★★★★ **Guideline 1-2 / DOS-2**: Libérer les ressources dans tous les cas
+##### 1.7.2.3 Cryptographie
+- Utilisez des algorithmes standards sécurisés comme AES pour le chiffrement des données sensibles.
 ```java
-public class FileProcessor {
-    public String readFile(Path path) {
-        try (var reader = Files.newBufferedReader(path)) {
-            return reader.lines()
-                .collect(Collectors.joining("\n"));
-        }
-    }
+Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+```
+
+### 1.8 Norme de codage Oracle SEI CERT pour Java
+#### 1.8.1 Règles
+- Respectez les règles strictes pour éviter les vulnérabilités liées aux données et à la sérialisation.
+
+#### 1.8.2 Recommandations
+- Préférez l'utilisation de bibliothèques modernes pour la sécurité (Spring Security, etc.).
+
+## 2. Gestion des exceptions
+- Toujours capturer les exceptions spécifiques plutôt que des exceptions générales.
+- Exemple :
+```java
+try {
+    operationCritique();
+} catch (IOException e) {
+    LOGGER.error("Erreur lors de l'opération critique", e);
+}
+```
+- Toujours inclure un message explicite lors de la levée d’une exception :
+```java
+throw new IllegalArgumentException("Paramètre invalide : " + param);
+```
+
+## 3. Tests unitaires
+- Utilisation de **JUnit** et **Mockito** pour les tests unitaires.
+- Exemple de test unitaire simple :
+```java
+@Test
+public void testMultiplier() {
+    Exemple exemple = new Exemple();
+    assertEquals(6, exemple.multiplier(2, 3));
 }
 ```
 
-#### 1.7.2.2. Information Confidentielle
+## 4. Revue de code et validation
+- Soumettre le code via une **pull request** sur le dépôt Git.
+- Utilisation de **SonarQube** pour analyser la qualité du code.
 
-★★★☆ **Guideline 2-1 / CONFIDENTIAL-1**: Purger les informations sensibles des exceptions
+## 5. Sécurité et propriété intellectuelle
+- Inclure dans chaque fichier la mention suivante :
 ```java
-public class SecurityManager {
-    public void authenticate(String username, String password) {
-        try {
-            // Process authentication
-        } catch (Exception e) {
-            // Bon exemple : pas d'information sensible dans le message
-            throw new SecurityException("Authentication failed");
-        }
-    }
-}
+// Ce code est la propriété de [Nom de l’entreprise] et ne peut pas être utilisé en dehors.
 ```
+- Toute dérogation à ces normes doit être approuvée par un architecte technique.
 
-★★★★ **Guideline 2-2 / CONFIDENTIAL-2**: Ne pas logger d'informations sensibles
-```java
-public class UserService {
-    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
-    
-    public void processUserData(UserCredentials credentials) {
-        // Bon exemple
-        logger.info("Processing user: {}", credentials.username());
-        // Mauvais exemple
-        // logger.info("User {} with password {}", credentials.username(), credentials.password());
-    }
-}
-```
+## Conclusion
+Ce document constitue une référence essentielle pour maintenir la qualité, la sécurité et la maintenabilité des projets Java au sein de l’entreprise. En respectant ces normes, chaque développeur contribue à la création de solutions robustes et performantes, tout en garantissant la conformité aux meilleures pratiques de l'industrie. Toute amélioration ou mise à jour doit être discutée et validée par les équipes concernées afin d'assurer une évolution continue des standards de développement.
 
-#### 1.7.2.3. Injection et Inclusion
-
-★★★★ **Guideline 3-1 / INJECT-1**: Générer un formatage valide
-```java
-public class DatabaseService {
-    public List<User> findUsers(String searchTerm) {
-        String sql = "SELECT * FROM users WHERE username = ?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, searchTerm);
-            return processResultSet(stmt.executeQuery());
-        }
-    }
-}
-```
-
-★★★☆ **Guideline 3-2 / INJECT-2**: Éviter le SQL dynamique
-```java
-public class QueryBuilder {
-    private static final Map<String, String> VALID_SORT_COLUMNS = Map.of(
-        "name", "username",
-        "date", "creation_date",
-        "status", "user_status"
-    );
-
-    public String buildSortQuery(String userInput) {
-        String column = VALID_SORT_COLUMNS.getOrDefault(userInput, "id");
-        return "SELECT * FROM users ORDER BY " + column;
-    }
-}
-```
-
-## 1.8. Exemples de fonctionnalités Java 17
-
-### 1.8.1. Pattern Matching pour switch
-```java
-public class TypeHandler {
-    public String processValue(Object obj) {
-        return switch (obj) {
-            case String s -> handleString(s);
-            case Integer i -> handleInteger(i);
-            case List<?> l -> handleList(l);
-            case null -> "null value";
-            default -> handleUnknown(obj);
-        };
-    }
-    
-    private String handleString(String s) {
-        return "String length: " + s.length();
-    }
-    
-    private String handleInteger(Integer i) {
-        return "Integer value: " + i;
-    }
-    
-    private String handleList(List<?> l) {
-        return "List size: " + l.size();
-    }
-    
-    private String handleUnknown(Object obj) {
-        return "Unknown type: " + obj.getClass().getSimpleName();
-    }
-}
-```
-
-### 1.8.2. Records pour les données immuables
-```java
-public record CustomerDTO(
-    String id,
-    String name,
-    String email,
-    LocalDate birthDate
-) {
-    // Validation dans le constructeur compact
-    public CustomerDTO {
-        Objects.requireNonNull(id, "ID cannot be null");
-        Objects.requireNonNull(name, "Name cannot be null");
-        if (name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Name cannot be empty");
-        }
-    }
-
-    // Méthodes dérivées
-    public boolean isAdult() {
-        return birthDate != null && 
-               birthDate.until(LocalDate.now(), ChronoUnit.YEARS) >= 18;
-    }
-
-    public String getDisplayName() {
-        return name.trim() + " (" + id + ")";
-    }
-}
-```
-
-### 1.8.3. Sealed Classes
-```java
-public sealed interface PaymentMethod 
-    permits CreditCard, BankTransfer, DigitalWallet {
-    
-    PaymentResult process(BigDecimal amount);
-    String getDisplayName();
-}
-
-public final record CreditCard(
-    String cardNumber,
-    String expiryDate,
-    String cvv
-) implements PaymentMethod {
-    @Override
-    public PaymentResult process(BigDecimal amount) {
-        // Implémentation sécurisée
-        return PaymentResult.success("CC-" + cardNumber.substring(12));
-    }
-
-    @Override
-    public String getDisplayName() {
-        return "Credit Card ****" + cardNumber.substring(12);
-    }
-}
-
-public final record BankTransfer(
-    String iban,
-    String bic
-) implements PaymentMethod {
-    @Override
-    public PaymentResult process(BigDecimal amount) {
-        return PaymentResult.pending("BT-" + iban.substring(iban.length() - 4));
-    }
-
-    @Override
-    public String getDisplayName() {
-        return "Bank Transfer " + iban.substring(iban.length() - 4);
-    }
-}
-```
-
-### 1.8.4. Modules
-```java
-// module-info.java
-module com.company.application {
-    // APIs publiques
-    exports com.company.application.api;
-    exports com.company.application.model;
-    
-    // Exports qualifiés
-    exports com.company.application.internal to 
-        com.company.application.test;
-    
-    // Dépendances
-    requires java.base;
-    requires java.sql;
-    requires static lombok;
-    requires transitive com.fasterxml.jackson.databind;
-    
-    // Services
-    uses com.company.application.spi.PaymentProcessor;
-    provides com.company.application.spi.PaymentProcessor with
-        com.company.application.internal.DefaultPaymentProcessor;
-}
-```
-
-### 1.8.5. Text Blocks
-```java
-public class QueryRepository {
-    private static final String COMPLEX_QUERY = """
-        SELECT 
-            u.id,
-            u.username,
-            u.email,
-            COUNT(o.id) as order_count,
-            SUM(o.total_amount) as total_spent
-        FROM users u
-        LEFT JOIN orders o ON u.id = o.user_id
-        WHERE u.status = 'ACTIVE'
-            AND u.created_at >= ?
-        GROUP BY 
-            u.id, 
-            u.username,
-            u.email
-        HAVING COUNT(o.id) > 0
-        ORDER BY total_spent DESC
-        LIMIT 10
-        """;
-        
-    private static final String JSON_CONFIG = """
-        {
-            "application": "MyApp",
-            "version": "1.0.0",
-            "database": {
-                "url": "jdbc:postgresql://localhost:5432/mydb",
-                "username": "admin",
-                "maxPoolSize": 20
-            }
-        }
-        """;
-}
-```
-
-### 1.8.6. Enhanced Pseudo-Random Number Generators
-```java
-public class SecurityUtil {
-    private final RandomGenerator secureRandom;
-    
-    public SecurityUtil() {
-        this.secureRandom = RandomGenerator.of("L64X128MixRandom");
-    }
-    
-    public String generateToken() {
-        byte[] token = new byte[32];
-  
