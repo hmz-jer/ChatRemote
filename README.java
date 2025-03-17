@@ -1,73 +1,92 @@
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
-  <!-- Fond principal -->
-  <rect width="900" height="700" fill="#ffffff" rx="0" ry="0"/>
-  
-  <!-- Titre principal -->
-  <text x="450" y="40" font-family="Arial" font-size="26" text-anchor="middle" fill="#333333" font-weight="bold">Structure JSON pour Notifications Dynamiques</text>
-  
-  <!-- Section structure actuelle -->
-  <rect x="50" y="70" width="800" height="280" fill="#e8eaf6" rx="5" ry="5" stroke="#3949ab" stroke-width="2"/>
-  <text x="80" y="100" font-family="Arial" font-size="20" fill="#283593" font-weight="bold">Structure actuelle</text>
-  
-  <rect x="80" y="120" width="740" height="210" fill="#ffffff" rx="5" ry="5" stroke="#7986cb" stroke-width="1.5"/>
-  <text x="100" y="150" font-family="Consolas, monospace" font-size="16" fill="#212121">
-    <tspan x="100" y="150">{</tspan>
-    <tspan x="120" y="180">  "path": "/token/status-notification",</tspan>
-    <tspan x="120" y="210">  "notification": {</tspan>
-    <tspan x="140" y="240">    "CustMsgId": { "mandatory": true, "format": "[0-9a-zA-Z ]{16}" },</tspan>
-    <tspan x="140" y="270">    "CustCnxId": { "mandatory": true, "format": "[0-9a-zA-Z ]{12}" },</tspan>
-    <tspan x="140" y="300">    ...</tspan>
-    <tspan x="120" y="330">  },</tspan>
-    <tspan x="120" y="360">  "ack": {</tspan>
-    <tspan x="140" y="390">    "CustMsgId": "?",</tspan>
-    <tspan x="140" y="420">    "CustCnxId": "?",</tspan>
-    <tspan x="140" y="450">    "RspnCode": "00",</tspan>
-    <tspan x="140" y="480">    "RspnRsn": "0000"</tspan>
-    <tspan x="120" y="510">  }</tspan>
-    <tspan x="100" y="540">}</tspan>
-  </text>
-  
-  <!-- Flèche de transition -->
-  <path d="M450,370 L450,430" stroke="#333333" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#333333"/>
-    </marker>
-  </defs>
-  
-  <!-- Section structure nouvelle -->
-  <rect x="50" y="430" width="800" height="400" fill="#e0f2f1" rx="5" ry="5" stroke="#00796b" stroke-width="2"/>
-  <text x="80" y="460" font-family="Arial" font-size="20" fill="#00695c" font-weight="bold">Structure proposée</text>
-  
-  <rect x="80" y="480" width="740" height="330" fill="#ffffff" rx="5" ry="5" stroke="#4db6ac" stroke-width="1.5"/>
-  <text x="100" y="510" font-family="Consolas, monospace" font-size="16" fill="#212121">
-    <tspan x="100" y="510">{</tspan>
-    <tspan x="120" y="540">  "path": "/token/status-notification",</tspan>
-    <tspan x="120" y="570">  "notification": { ... },</tspan>
-    <tspan x="120" y="600">  "ack": {</tspan>
-    <tspan x="140" y="630">    "type": "dynamic",</tspan>
-    <tspan x="140" y="660">    "csvConfig": {</tspan>
-    <tspan x="160" y="690">      "discriminantFields": ["RequestTypeExpected", "PANRefIdExpected"],</tspan>
-    <tspan x="160" y="720">      "additionalDiscriminants": ["Tag1Expected", "Tag2Expected"],</tspan>
-    <tspan x="160" y="750">      "defaultScenario": {</tspan>
-    <tspan x="180" y="780">        "RspnCode": "00", "RspnRsn": "0000"</tspan>
-    <tspan x="160" y="810">      }</tspan>
-    <tspan x="140" y="840">    }</tspan>
-    <tspan x="120" y="870">  }</tspan>
-    <tspan x="100" y="900">}</tspan>
-  </text>
-  
-  <!-- Annotations -->
-  <rect x="700" y="630" width="20" height="20" fill="#4caf50" rx="3" ry="3"/>
-  <text x="730" y="645" font-family="Arial" font-size="16" fill="#333333" text-anchor="start">Nouveau type</text>
-  
-  <rect x="700" y="690" width="20" height="20" fill="#2196f3" rx="3" ry="3"/>
-  <text x="730" y="705" font-family="Arial" font-size="16" fill="#333333" text-anchor="start">Clés primaires</text>
-  
-  <rect x="700" y="720" width="20" height="20" fill="#9c27b0" rx="3" ry="3"/>
-  <text x="730" y="735" font-family="Arial" font-size="16" fill="#333333" text-anchor="start">Clés secondaires</text>
-  
-  <rect x="700" y="780" width="20" height="20" fill="#ff9800" rx="3" ry="3"/>
-  <text x="730" y="795" font-family="Arial" font-size="16" fill="#333333" text-anchor="start">Scénario par défaut</text>
-</svg>
+Voici un exemple détaillé de JSON pour les notifications dynamiques, avec des explications que vous pourrez inclure dans un mail :
+
+```json
+{
+  "path": "/token/status-notification",
+  "notification": {
+    "CustMsgId": {
+      "mandatory": true,
+      "format": "[0-9a-zA-Z ]{16}"
+    },
+    "CustCnxId": {
+      "mandatory": true, 
+      "format": "[0-9a-zA-Z ]{12}"
+    },
+    "TokStatus": {
+      "mandatory": true,
+      "format": "[0-9a-zA-Z ]{1}"
+    },
+    "NotifReason": {
+      "mandatory": true,
+      "format": "[0-9]{2}"
+    }
+  },
+  "ack": {
+    "type": "dynamic",
+    "csvConfig": {
+      "discriminantFields": ["RequestTypeExpected", "PANRefIdExpected"],
+      "additionalDiscriminants": ["Tag1Expected", "Tag2Expected"],
+      "defaultScenario": {
+        "RspnCode": "00",
+        "RspnRsn": "0000"
+      }
+    }
+  }
+}
+```
+
+## Explications pour le mail
+
+Bonjour,
+
+Suite à notre discussion concernant l'évolution du WS-Simulator pour supporter les acquittements dynamiques, je vous propose la structure JSON suivante pour les spécifications de notifications.
+
+### Structure proposée
+
+J'ai préparé une évolution de la structure JSON qui permet de rendre les acquittements dynamiques tout en maintenant la compatibilité avec l'existant. Voici les principaux changements :
+
+1. **Ajout d'un type d'acquittement dynamique** :
+   - Le champ `"type": "dynamic"` indique que l'acquittement doit être généré dynamiquement à partir d'un scénario
+   - Ce champ permet une distinction claire entre les anciens et nouveaux comportements
+
+2. **Configuration pour le chargement des scénarios depuis CSV** :
+   - La section `"csvConfig"` contient les paramètres pour la génération des acquittements dynamiques
+   - Les scénarios seront chargés depuis un fichier CSV, comme pour les simulations existantes
+
+3. **Champs discriminants pour identifier les scénarios** :
+   - `"discriminantFields"` : liste des champs principaux utilisés pour identifier un scénario (clés primaires)
+   - Ces champs seront utilisés pour construire une clé composite pour la Map des scénarios
+   - Dans l'exemple : `"RequestTypeExpected"` et `"PANRefIdExpected"`
+
+4. **Champs discriminants secondaires (optionnels)** :
+   - `"additionalDiscriminants"` : champs secondaires pour une identification plus fine des scénarios
+   - Permettent une correspondance plus précise dans des cas complexes
+
+5. **Scénario par défaut** :
+   - `"defaultScenario"` : valeurs à utiliser si aucun scénario ne correspond aux discriminants
+   - Garantit une réponse cohérente même en l'absence de scénario spécifique
+
+### Structure du fichier CSV
+
+Le fichier CSV associé pourrait ressembler à :
+
+```
+ScenarioId,RequestTypeExpected,PANRefIdExpected,Tag1Expected,Tag2Expected,RspnCode,RspnRsn,PANRefId,CustMsgId,CustCnxId,ResponseTimeout
+00001,EnrollCardToken,PRSBM123456789123456789123012373,*,*,00,0000,PRSBM123456789123456789123012373,ECHO,ECHO,0
+00002,EnrollCardToken,PRSBM123456789123456789123012374,*,*,00,0000,PRSBM123456789123456789123012374,ECHO,ECHO,1000
+00003,EnrollCardToken,PRSBM123456789123456789123012375,*,*,10,1003,NULL,ECHO,ECHO,2000
+```
+
+Où :
+- Les colonnes `RequestTypeExpected` et `PANRefIdExpected` correspondent aux discriminants principaux
+- Les colonnes `Tag1Expected` et `Tag2Expected` sont les discriminants secondaires
+- La valeur `ECHO` indique de reprendre la valeur du champ correspondant de la requête
+- `ResponseTimeout` permet de définir un délai avant l'envoi de la réponse (en millisecondes)
+
+Cette approche permet d'implémenter le besoin tout en minimisant les changements nécessaires dans le code existant. Elle offre également une grande flexibilité pour les évolutions futures.
+
+N'hésitez pas à me faire part de vos commentaires ou suggestions d'ajustements.
+
+Cordialement,
+[Votre nom]
