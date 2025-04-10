@@ -1,48 +1,267 @@
-Voici un mail détaillant les étapes d'installation et de configuration de RSLOG :
-
----
-
-**Objet : Configuration de RSLOG - Étapes d'installation et packages requis**
-
-Bonjour,
-
-Voici les étapes de configuration de RSLOG comme discuté :
-
-1. **Création du fichier de configuration** :
-   - Créer un fichier dans `/etc/rsyslog.d/` (exemple : `ibcproxy.conf`)
-   - Contenu du fichier :
-     ```
-     $template log_ersb_v7,"%TIMESTAMP:1:10:date-rfc3339% %TIMESTAMP:12:23:date-rfc3339%|%HOSTNAME%|%msg:::drop-last-lf%\n"
-     $template rslogger,"%TIMESTAMP:1:10:date-rfc3339% %TIMESTAMP:12:23:date-rfc3339%|%HOSTNAME%|%msg:::drop-last-lf%\n"
-     $FileCreateMode 0640
-     if ( $programname == 'IBC') then /var/log/log2trap.log;rslogger
-     & @proxylog
-     & ~
-     ```
-
-2. **Modification du fichier principal** :
-   - Modifier le fichier `/etc/rsyslog.conf`
-   - Ajouter la ligne : `include (file="/etc/rsyslog.d/*.conf" mode="optional")`
-
-3. **Gestion du service** :
-   - Arrêter le service : `service rsyslog stop`
-   - Démarrer le service : `service rsyslog start`
-
-4. **Notes importantes** :
-   - Si `$programname == 'IBC'`, IBC est le nom de l'application Spring Boot
-   - Utiliser `tail -f /var/log/log2trap.log` pour surveiller les logs
-
-5. **Test de fonctionnement** :
-   - Exécuter : `logger -a 505 -A IBC -C IBC_STATUS_REQUEST -m 0001 -t msg_type -i E -c 9999 -M "test_message"`
-
-**Packages installés** (versions détectées sur le système) :
-- rsyslog-1.1.0-1.el8.x86_64
-- librslog-1.1.1-2.el8b.x86_64
-- python3-rslog-0.8.0-1.el8b.x86_64
-- rslogger-0.1.4-0.el8bx.noarch
-
-N'hésitez pas à me contacter si vous avez des questions ou besoin d'aide supplémentaire pour cette configuration.
-
-Cordialement,
-
----
+{
+	"info": {
+		"_postman_id": "a123456-7890-1234-abcd-1234567890ab",
+		"name": "API Test Collection",
+		"description": "Collection pour tester l'API avec 4 scénarios POST sur le même endpoint",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Scénario 1 - Création d'utilisateur",
+			"item": [
+				{
+					"name": "Créer Utilisateur",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Statut est 200 ou 201\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"La réponse contient un ID utilisateur\", function () {",
+									"    pm.expect(jsonData).to.have.property('userId');",
+									"});",
+									"",
+									"pm.test(\"Le message de confirmation est correct\", function () {",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"    pm.expect(jsonData.message).to.include('utilisateur créé');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\": \"createUser\",\n    \"name\": \"{{userName}}\",\n    \"email\": \"{{userEmail}}\",\n    \"role\": \"user\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/endpoint",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"endpoint"
+							]
+						},
+						"description": "Créer un nouvel utilisateur"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scénario 2 - Mise à jour de produit",
+			"item": [
+				{
+					"name": "Mettre à jour produit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Statut est 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"La mise à jour est confirmée\", function () {",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});",
+									"",
+									"pm.test(\"Le produit a été mis à jour\", function () {",
+									"    pm.expect(jsonData).to.have.property('data');",
+									"    pm.expect(jsonData.data).to.have.property('productId');",
+									"    pm.expect(jsonData.data).to.have.property('updatedFields');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\": \"updateProduct\",\n    \"productId\": \"{{productId}}\",\n    \"name\": \"{{productName}}\",\n    \"price\": {{productPrice}},\n    \"category\": \"{{productCategory}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/endpoint",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"endpoint"
+							]
+						},
+						"description": "Mettre à jour un produit existant"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scénario 3 - Traitement de commande",
+			"item": [
+				{
+					"name": "Traiter commande",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Statut est 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"La commande est validée\", function () {",
+									"    pm.expect(jsonData).to.have.property('orderStatus');",
+									"    pm.expect(jsonData.orderStatus).to.equal('processed');",
+									"});",
+									"",
+									"pm.test(\"Le numéro de référence est généré\", function () {",
+									"    pm.expect(jsonData).to.have.property('referenceNumber');",
+									"    pm.expect(jsonData.referenceNumber).to.be.a('string');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\": \"processOrder\",\n    \"orderId\": \"{{orderId}}\",\n    \"items\": [\n        {\n            \"productId\": \"{{productId}}\",\n            \"quantity\": {{orderQuantity}}\n        }\n    ],\n    \"shippingAddress\": \"{{shippingAddress}}\",\n    \"paymentMethod\": \"{{paymentMethod}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/endpoint",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"endpoint"
+							]
+						},
+						"description": "Traiter une nouvelle commande"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scénario 4 - Génération de rapport",
+			"item": [
+				{
+					"name": "Générer rapport",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Statut est 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"Le rapport est généré\", function () {",
+									"    pm.expect(jsonData).to.have.property('reportGenerated');",
+									"    pm.expect(jsonData.reportGenerated).to.be.true;",
+									"});",
+									"",
+									"pm.test(\"Le rapport contient des données\", function () {",
+									"    pm.expect(jsonData).to.have.property('reportData');",
+									"    pm.expect(jsonData.reportData).to.be.an('object');",
+									"});",
+									"",
+									"pm.test(\"La période du rapport est correcte\", function () {",
+									"    pm.expect(jsonData.reportData).to.have.property('period');",
+									"    pm.expect(jsonData.reportData.period).to.equal(pm.environment.get('reportPeriod'));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\": \"generateReport\",\n    \"reportType\": \"{{reportType}}\",\n    \"period\": \"{{reportPeriod}}\",\n    \"format\": \"{{reportFormat}}\",\n    \"filters\": {\n        \"category\": \"{{filterCategory}}\",\n        \"minValue\": {{filterMinValue}}\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/endpoint",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"endpoint"
+							]
+						},
+						"description": "Générer un rapport personnalisé"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
