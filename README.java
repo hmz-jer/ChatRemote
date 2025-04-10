@@ -1,72 +1,4 @@
-{
-	"info": {
-		"_postman_id": "a123456-7890-1234-abcd-1234567890ab",
-		"name": "API Test Collection",
-		"description": "Collection pour tester l'API avec 4 scénarios POST sur le même endpoint",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "Scénario 1 - Création d'utilisateur",
-			"item": [
-				{
-					"name": "Créer Utilisateur",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Statut est 200 ou 201\", function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-									"});",
-									"",
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"La réponse contient un ID utilisateur\", function () {",
-									"    pm.expect(jsonData).to.have.property('userId');",
-									"});",
-									"",
-									"pm.test(\"Le message de confirmation est correct\", function () {",
-									"    pm.expect(jsonData).to.have.property('message');",
-									"    pm.expect(jsonData.message).to.include('utilisateur créé');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"action\": \"createUser\",\n    \"name\": \"{{userName}}\",\n    \"email\": \"{{userEmail}}\",\n    \"role\": \"user\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/endpoint",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"endpoint"
-							]
-						},
-						"description": "Créer un nouvel utilisateur"
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Scénario 2 - Mise à jour de produit",
-			"item": [
-				{
+
 					"name": "Mettre à jour produit",
 					"event": [
 						{
@@ -76,7 +8,33 @@
 									"pm.test(\"Statut est 200\", function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
-									"",
+			Voici le mail avec une seule commande Newman simplifiée :
+
+---
+
+**Objet :** Tests API - Collection Postman avec commande Newman
+
+Bonjour,
+
+Je vous transmets notre collection Postman pour les tests de l'API, comprenant 4 scénarios de test. Vous trouverez en pièces jointes :
+
+1. `APITestCollection.json` - La collection avec les 4 scénarios de test
+2. `APITestEnvironment.json` - Le fichier d'environnement contenant les variables (URL de l'API et X-SSL-Cert)
+
+Pour exécuter ces tests en ligne de commande, voici la commande Newman à utiliser :
+
+```bash
+newman run APITestCollection.json --environment APITestEnvironment.json
+```
+
+Les scénarios inclus sont tous des requêtes POST sur le même endpoint, mais avec des corps (JSON) différents pour tester les différentes fonctionnalités de l'API.
+
+N'hésitez pas à me contacter si vous avez des questions.
+
+Cordialement,
+[Votre nom]
+
+---						"",
 									"var jsonData = pm.response.json();",
 									"",
 									"pm.test(\"La mise à jour est confirmée\", function () {",
