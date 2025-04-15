@@ -13,69 +13,82 @@ plugins {
 def distribGroup = 'Distribution'
 
 // Tâche pour créer l'arborescence de l'intégration
-task createIntegrationStructure(type: Copy, group: distribGroup, description: 'Crée l\'arborescence d\'intégration') {
-    // Crée les dossiers nécessaires
+task createIntegrationStructure(group: distribGroup, description: 'Crée l\'arborescence d\'intégration') {
+    dependsOn bootJar
+    
     doFirst {
-        delete "${buildDir}/integration"
-        mkdir "${buildDir}/integration"
-        mkdir "${buildDir}/integration/bin"
-        mkdir "${buildDir}/integration/conf"
-        mkdir "${buildDir}/integration/etc"
-        mkdir "${buildDir}/integration/logs"
-        mkdir "${buildDir}/integration/script"
-    }
-    
-    // Copier le JAR principal dans le dossier bin
-    from("${buildDir}/libs") {
-        include "*.jar"
-        rename { String fileName ->
-            "ibcproxy.jar"
+        // Nettoyage
+        delete layout.buildDirectory.dir("integration")
+        
+        // Création des dossiers
+        def integrationDir = layout.buildDirectory.dir("integration").get().asFile
+        def binDir = new File(integrationDir, "bin")
+        def confDir = new File(integrationDir, "conf")
+        def etcDir = new File(integrationDir, "etc")
+        def logsDir = new File(integrationDir, "logs")
+        def scriptDir = new File(integrationDir, "script")
+        
+        binDir.mkdirs()
+        confDir.mkdirs()
+        etcDir.mkdirs()
+        logsDir.mkdirs()
+        scriptDir.mkdirs()
+        
+        // Copie du JAR
+        copy {
+            from layout.buildDirectory.dir("libs")
+            include "*.jar"
+            rename { String fileName ->
+                "ibcproxy.jar"
+            }
+            into binDir
         }
-        into "bin"
-    }
-    
-    // Copier le fichier application.yml depuis le projet
-    from("src/main/resources") {
-        include "application.yml"
-        into "etc"
-    }
-    
-    // Copier le fichier logback.xml depuis le projet
-    from("src/main/resources") {
-        include "logback.xml"
-        into "conf"
-    }
-    
-    // Copier le fichier jbcproxy.cfg depuis le projet
-    from("src/main/resources/config") {
-        include "jbcproxy.cfg"
-        into "conf"
-    }
-    
-    // Copier le script manage.sh depuis le projet
-    from("src/main/resources/scripts") {
-        include "manage.sh"
-        into "script"
-    }
-    
-    // Rendre le script manage.sh exécutable
-    doLast {
-        exec {
-            workingDir = file("${buildDir}/integration/script")
-            commandLine = ['chmod', '+x', 'manage.sh']
+        
+        // Copie de application.yml
+        copy {
+            from "src/main/resources"
+            include "application.yml"
+            into etcDir
+        }
+        
+        // Copie de logback.xml
+        copy {
+            from "src/main/resources"
+            include "logback.xml"
+            into confDir
+        }
+        
+        // Copie de jbcproxy.cfg
+        copy {
+            from "src/main/resources/config"
+            include "jbcproxy.cfg"
+            into confDir
+        }
+        
+        // Copie du script manage.sh
+        copy {
+            from "src/main/resources/scripts"
+            include "manage.sh"
+            into scriptDir
+        }
+        
+        // Rendre le script manage.sh exécutable
+        def manageScript = new File(scriptDir, "manage.sh")
+        if (manageScript.exists()) {
+            manageScript.setExecutable(true, false)
         }
     }
-    
-    into "${buildDir}/integration"
 }
 
 // Tâche pour créer l'archive tar.gz
-task distrib(type: Tar, dependsOn: [bootJar, createIntegrationStructure], group: distribGroup, description: 'Crée l\'archive de distribution tar.gz') {
-    archiveFileName = "ibcproxy-${version}.tar.gz" 
+task distrib(type: Tar, group: distribGroup, description: 'Crée l\'archive de distribution tar.gz') {
+    dependsOn createIntegrationStructure
+    
+    archiveFileName = "ibcproxy-${project.version}.tar.gz" 
     compression = Compression.GZIP
     
-    from "${buildDir}/integration"
-    into "ibcproxy-${version}"
+    from layout.buildDirectory.dir("integration")
+    into "ibcproxy-${project.version}"
     
     doLast {
         println "Archive de distribution créée : ${archiveFile.get().asFile.path}"
@@ -83,4 +96,6 @@ task distrib(type: Tar, dependsOn: [bootJar, createIntegrationStructure], group:
 }
 
 // Ajout de la tâche distrib à la tâche build
-build.dependsOn distrib
+tasks.named('build') {
+    dependsOn distrib
+}
