@@ -1,225 +1,304 @@
+#!/bin/bash
 
-					"name": "Mettre à jour produit",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Statut est 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-			Voici le mail avec une seule commande Newman simplifiée :
+# Script de création de l'arborescence pour IBCPROXY
+# ----------------------------------------------
 
----
+# Vérification des arguments
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <chemin_installation>"
+    echo "Exemple: $0 /opt/ibcproxy"
+    exit 1
+fi
 
-**Objet :** Tests API - Collection Postman avec commande Newman
+# Chemin d'installation
+INSTALL_PATH="$1"
+echo "Création de l'arborescence IBCPROXY dans: $INSTALL_PATH"
 
-Bonjour,
+# Création de l'arborescence principale
+mkdir -p "$INSTALL_PATH"/{bin,conf,etc,logs,script}
 
-Je vous transmets notre collection Postman pour les tests de l'API, comprenant 4 scénarios de test. Vous trouverez en pièces jointes :
+echo "Structure principale créée."
 
-1. `APITestCollection.json` - La collection avec les 4 scénarios de test
-2. `APITestEnvironment.json` - Le fichier d'environnement contenant les variables (URL de l'API et X-SSL-Cert)
+# Création du fichier jbcproxy.cfg
+cat > "$INSTALL_PATH/conf/jbcproxy.cfg" << 'EOF'
+# Configuration pour l'application IBCPROXY
+# -----------------------------------
 
-Pour exécuter ces tests en ligne de commande, voici la commande Newman à utiliser :
+# Nom de l'application
+APP_NAME="ibcproxy"
 
-```bash
-newman run APITestCollection.json --environment APITestEnvironment.json
-```
+# Chemin vers le JDK
+JAVA_HOME="/usr/lib/jvm/java-17"
 
-Les scénarios inclus sont tous des requêtes POST sur le même endpoint, mais avec des corps (JSON) différents pour tester les différentes fonctionnalités de l'API.
+# Paramètres de mémoire JVM
+JAVA_OPTS="-Xms256m -Xmx512m"
 
-N'hésitez pas à me contacter si vous avez des questions.
+# Chemin pour stocker le PID de l'application
+PID_FILE="ibcproxy.pid"
 
-Cordialement,
-[Votre nom]
+# Chemins des répertoires et fichiers
+LOG_PATH="logs"
 
----						"",
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"La mise à jour est confirmée\", function () {",
-									"    pm.expect(jsonData).to.have.property('success');",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"});",
-									"",
-									"pm.test(\"Le produit a été mis à jour\", function () {",
-									"    pm.expect(jsonData).to.have.property('data');",
-									"    pm.expect(jsonData.data).to.have.property('productId');",
-									"    pm.expect(jsonData.data).to.have.property('updatedFields');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"action\": \"updateProduct\",\n    \"productId\": \"{{productId}}\",\n    \"name\": \"{{productName}}\",\n    \"price\": {{productPrice}},\n    \"category\": \"{{productCategory}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/endpoint",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"endpoint"
-							]
-						},
-						"description": "Mettre à jour un produit existant"
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Scénario 3 - Traitement de commande",
-			"item": [
-				{
-					"name": "Traiter commande",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Statut est 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"La commande est validée\", function () {",
-									"    pm.expect(jsonData).to.have.property('orderStatus');",
-									"    pm.expect(jsonData.orderStatus).to.equal('processed');",
-									"});",
-									"",
-									"pm.test(\"Le numéro de référence est généré\", function () {",
-									"    pm.expect(jsonData).to.have.property('referenceNumber');",
-									"    pm.expect(jsonData.referenceNumber).to.be.a('string');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"action\": \"processOrder\",\n    \"orderId\": \"{{orderId}}\",\n    \"items\": [\n        {\n            \"productId\": \"{{productId}}\",\n            \"quantity\": {{orderQuantity}}\n        }\n    ],\n    \"shippingAddress\": \"{{shippingAddress}}\",\n    \"paymentMethod\": \"{{paymentMethod}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/endpoint",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"endpoint"
-							]
-						},
-						"description": "Traiter une nouvelle commande"
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Scénario 4 - Génération de rapport",
-			"item": [
-				{
-					"name": "Générer rapport",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Statut est 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Le rapport est généré\", function () {",
-									"    pm.expect(jsonData).to.have.property('reportGenerated');",
-									"    pm.expect(jsonData.reportGenerated).to.be.true;",
-									"});",
-									"",
-									"pm.test(\"Le rapport contient des données\", function () {",
-									"    pm.expect(jsonData).to.have.property('reportData');",
-									"    pm.expect(jsonData.reportData).to.be.an('object');",
-									"});",
-									"",
-									"pm.test(\"La période du rapport est correcte\", function () {",
-									"    pm.expect(jsonData.reportData).to.have.property('period');",
-									"    pm.expect(jsonData.reportData.period).to.equal(pm.environment.get('reportPeriod'));",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"action\": \"generateReport\",\n    \"reportType\": \"{{reportType}}\",\n    \"period\": \"{{reportPeriod}}\",\n    \"format\": \"{{reportFormat}}\",\n    \"filters\": {\n        \"category\": \"{{filterCategory}}\",\n        \"minValue\": {{filterMinValue}}\n    }\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/endpoint",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"endpoint"
-							]
-						},
-						"description": "Générer un rapport personnalisé"
-					},
-					"response": []
-				}
-			]
-		}
-	],
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		}
-	]
+# Paramètres spécifiques à l'application
+DEBUG_MODE="false"
+
+# Timeout (en secondes) pour l'arrêt gracieux de l'application
+STOP_TIMEOUT=30
+EOF
+
+echo "Fichier jbcproxy.cfg créé."
+
+# Création du fichier logback.xml
+cat > "$INSTALL_PATH/conf/logback.xml" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Utilise la variable LOG_PATH définie lors du démarrage de l'application -->
+    <property name="LOG_FILE" value="${LOG_PATH}/ibcproxy.log"/>
+    
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Rotation quotidienne des logs -->
+            <fileNamePattern>${LOG_PATH}/archived/ibcproxy.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- Conservation des logs pendant 30 jours -->
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+    
+    <!-- Définition des niveaux de log -->
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="com.votre.package" level="DEBUG"/>
+    
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>
+EOF
+
+echo "Fichier logback.xml créé."
+
+# Création du fichier application.yml
+cat > "$INSTALL_PATH/etc/application.yml" << 'EOF'
+spring:
+  application:
+    name: ibcproxy
+  
+  # Configuration Kafka
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: ibcproxy-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# Configuration du serveur
+server:
+  port: 8080
+  servlet:
+    context-path: /ibcproxy
+
+# Configuration de logging (complémentaire à logback.xml)
+logging:
+  level:
+    root: INFO
+    com.votre.package: DEBUG
+    org.springframework: INFO
+
+# Configuration de l'API Gateway
+apigateway:
+  url: http://localhost:8090
+  connect-timeout: 5000
+  read-timeout: 10000
+  max-retries: 3
+EOF
+
+echo "Fichier application.yml créé."
+
+# Création du fichier manage.sh
+cat > "$INSTALL_PATH/script/manage.sh" << 'EOF'
+#!/bin/bash
+
+# Chemin du répertoire de l'application
+APP_DIR="$(dirname $(dirname $(realpath $0)))"
+
+# Chargement de la configuration
+CONFIG_FILE="$APP_DIR/conf/jbcproxy.cfg"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    echo "ERREUR: Fichier de configuration non trouvé: $CONFIG_FILE"
+    exit 1
+fi
+
+# Définition des chemins basés sur la configuration
+JAR_PATH="$APP_DIR/bin/${APP_NAME}.jar"
+CONFIG_PATH="$APP_DIR/etc/application.yml"
+LOGBACK_PATH="$APP_DIR/conf/logback.xml"
+LOG_PATH="$APP_DIR/${LOG_PATH}"
+PID_FILE="$APP_DIR/${PID_FILE}"
+
+# Utilisation du JAVA_HOME depuis la configuration
+if [ -n "$JAVA_HOME" ]; then
+    JAVA_CMD="$JAVA_HOME/bin/java"
+else
+    JAVA_CMD="java"
+fi
+
+# Vérification de l'existence des dossiers et fichiers nécessaires
+check_prerequisites() {
+    if [ ! -f "$JAR_PATH" ]; then
+        echo "ERREUR: Le fichier JAR n'existe pas: $JAR_PATH"
+        exit 1
+    fi
+    
+    if [ ! -f "$CONFIG_PATH" ]; then
+        echo "ERREUR: Le fichier de configuration n'existe pas: $CONFIG_PATH"
+        exit 1
+    fi
+    
+    if [ ! -f "$LOGBACK_PATH" ]; then
+        echo "ERREUR: Le fichier logback n'existe pas: $LOGBACK_PATH"
+        exit 1
+    fi
+    
+    # Création du dossier logs s'il n'existe pas
+    if [ ! -d "$LOG_PATH" ]; then
+        mkdir -p "$LOG_PATH"
+    fi
+    
+    # Création du dossier archives s'il n'existe pas
+    if [ ! -d "$LOG_PATH/archived" ]; then
+        mkdir -p "$LOG_PATH/archived"
+    fi
 }
+
+# Fonction pour démarrer l'application
+start_app() {
+    check_prerequisites
+    
+    if [ -f "$PID_FILE" ] && ps -p $(cat "$PID_FILE") > /dev/null; then
+        echo "L'application est déjà en cours d'exécution avec PID $(cat "$PID_FILE")"
+        return 1
+    fi
+    
+    echo "Démarrage de l'application..."
+    
+    nohup $JAVA_CMD $JAVA_OPTS -jar \
+        -Dspring.config.location=file:$CONFIG_PATH \
+        -Dlogging.config=file:$LOGBACK_PATH \
+        -DLOG_PATH=$LOG_PATH \
+        $JAR_PATH > $LOG_PATH/console.log 2>&1 &
+    
+    echo $! > "$PID_FILE"
+    echo "Application démarrée avec PID $(cat "$PID_FILE")"
+}
+
+# Fonction pour arrêter l'application
+stop_app() {
+    if [ -f "$PID_FILE" ]; then
+        PID=$(cat "$PID_FILE")
+        if ps -p $PID > /dev/null; then
+            echo "Arrêt de l'application avec PID $PID..."
+            kill $PID
+            
+            # Attendre que le processus se termine (utilise STOP_TIMEOUT depuis la config)
+            for i in $(seq 1 $STOP_TIMEOUT); do
+                if ! ps -p $PID > /dev/null; then
+                    break
+                fi
+                sleep 1
+            done
+            
+            # Si le processus est toujours en cours d'exécution, force kill
+            if ps -p $PID > /dev/null; then
+                echo "L'application ne répond pas, force kill..."
+                kill -9 $PID
+            fi
+            
+            rm "$PID_FILE"
+            echo "Application arrêtée."
+        else
+            echo "L'application n'est pas en cours d'exécution (PID $PID non trouvé)."
+            rm "$PID_FILE"
+        fi
+    else
+        echo "L'application n'est pas en cours d'exécution (fichier PID non trouvé)."
+    fi
+}
+
+# Fonction pour vérifier le statut de l'application
+status_app() {
+    if [ -f "$PID_FILE" ] && ps -p $(cat "$PID_FILE") > /dev/null; then
+        echo "L'application est en cours d'exécution avec PID $(cat "$PID_FILE")"
+    else
+        echo "L'application n'est pas en cours d'exécution."
+        if [ -f "$PID_FILE" ]; then
+            rm "$PID_FILE"
+        fi
+    fi
+}
+
+# Fonction d'affichage de l'aide
+show_help() {
+    echo "Utilisation: $0 {start|stop|restart|status}"
+    echo "  start   : Démarrer l'application"
+    echo "  stop    : Arrêter l'application"
+    echo "  restart : Redémarrer l'application"
+    echo "  status  : Vérifier le statut de l'application"
+}
+
+# Traitement des commandes
+case "$1" in
+    start)
+        start_app
+        ;;
+    stop)
+        stop_app
+        ;;
+    restart)
+        stop_app
+        sleep 2
+        start_app
+        ;;
+    status)
+        status_app
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac
+
+exit 0
+EOF
+
+# Rendre le script manage.sh exécutable
+chmod +x "$INSTALL_PATH/script/manage.sh"
+
+echo "Fichier manage.sh créé et rendu exécutable."
+
+# Créer un fichier placeholder pour le jar
+touch "$INSTALL_PATH/bin/ibcproxy.jar"
+echo "Placeholder pour le fichier JAR créé. Remplacez-le par le vrai JAR."
+
+echo ""
+echo "========================================================"
+echo "Structure IBCPROXY créée avec succès dans $INSTALL_PATH"
+echo "N'oubliez pas de remplacer le fichier JAR placeholder dans bin/"
+echo "avec votre JAR réel avant de démarrer l'application."
+echo "========================================================"
