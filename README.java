@@ -1,107 +1,86 @@
-# IBCPROXY
+// Ajoutez ce bloc dans votre fichier build.gradle
 
-## Vue d'ensemble
-IBCPROXY est un service proxy développé en Java 17 avec Spring Boot qui sert d'intermédiaire entre Kafka et une API Gateway. Cette application facilite la communication entre les différents composants de l'infrastructure en assurant le routage des messages et la transformation des données.
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.0' // Ajustez la version selon votre projet
+    id 'io.spring.dependency-management' version '1.1.4'
+    // ... vos autres plugins
+}
 
-## Fonctionnalités principales
-- Consommation de messages depuis les topics Kafka
-- Transformation et routage des messages
-- Acheminement des requêtes vers l'API Gateway
-- Gestion des réponses et des erreurs
+// ... Vos autres configurations
 
-## Structure détaillée
+// Définition d'un groupe de tâches pour la distribution
+def distribGroup = 'Distribution'
 
-```
-integration/
-├── bin/                # Contient le fichier JAR exécutable de l'application
-│   └── ibcproxy.jar    # JAR principal de l'application
-├── conf/               # Fichiers de configuration de l'environnement
-│   ├── jbcproxy.cfg    # Configuration des paramètres d'exécution (JVM, chemins)
-│   └── logback.xml     # Configuration du système de journalisation
-├── etc/                # Configuration Spring Boot
-│   └── application.yml # Paramètres Spring, Kafka et API Gateway
-├── logs/               # Dossier des fichiers journaux
-│   ├── ibcproxy.log    # Journal principal de l'application
-│   └── console.log     # Sortie console de l'application
-└── script/             # Scripts de gestion
-    └── manage.sh       # Script pour démarrer/arrêter/vérifier l'application
-```
+// Tâche pour créer l'arborescence de l'intégration
+task createIntegrationStructure(type: Copy, group: distribGroup, description: 'Crée l\'arborescence d\'intégration') {
+    // Crée les dossiers nécessaires
+    doFirst {
+        delete "${buildDir}/integration"
+        mkdir "${buildDir}/integration"
+        mkdir "${buildDir}/integration/bin"
+        mkdir "${buildDir}/integration/conf"
+        mkdir "${buildDir}/integration/etc"
+        mkdir "${buildDir}/integration/logs"
+        mkdir "${buildDir}/integration/script"
+    }
+    
+    // Copier le JAR principal dans le dossier bin
+    from("${buildDir}/libs") {
+        include "*.jar"
+        rename { String fileName ->
+            "ibcproxy.jar"
+        }
+        into "bin"
+    }
+    
+    // Copier le fichier application.yml depuis le projet
+    from("src/main/resources") {
+        include "application.yml"
+        into "etc"
+    }
+    
+    // Copier le fichier logback.xml depuis le projet
+    from("src/main/resources") {
+        include "logback.xml"
+        into "conf"
+    }
+    
+    // Copier le fichier jbcproxy.cfg depuis le projet
+    from("src/main/resources/config") {
+        include "jbcproxy.cfg"
+        into "conf"
+    }
+    
+    // Copier le script manage.sh depuis le projet
+    from("src/main/resources/scripts") {
+        include "manage.sh"
+        into "script"
+    }
+    
+    // Rendre le script manage.sh exécutable
+    doLast {
+        exec {
+            workingDir = file("${buildDir}/integration/script")
+            commandLine = ['chmod', '+x', 'manage.sh']
+        }
+    }
+    
+    into "${buildDir}/integration"
+}
 
-### Description des dossiers et fichiers
+// Tâche pour créer l'archive tar.gz
+task distrib(type: Tar, dependsOn: [bootJar, createIntegrationStructure], group: distribGroup, description: 'Crée l\'archive de distribution tar.gz') {
+    archiveFileName = "ibcproxy-${version}.tar.gz" 
+    compression = Compression.GZIP
+    
+    from "${buildDir}/integration"
+    into "ibcproxy-${version}"
+    
+    doLast {
+        println "Archive de distribution créée : ${archiveFile.get().asFile.path}"
+    }
+}
 
-#### Dossier `bin/`
-Ce dossier contient uniquement le fichier JAR exécutable de l'application IBCPROXY. Après la compilation de votre projet, placez le fichier JAR généré ici.
-
-#### Dossier `conf/`
-Contient les fichiers de configuration de l'environnement :
-- **jbcproxy.cfg** : Configuration du démarrage de l'application
-  - Chemin du JDK Java à utiliser
-  - Options JVM (mémoire, etc.)
-  - Autres paramètres d'exécution
-
-- **logback.xml** : Configuration détaillée du système de logs
-  - Format des messages de log
-  - Politique de rotation des fichiers
-  - Niveaux de log par package
-
-#### Dossier `etc/`
-Contient la configuration Spring Boot de l'application :
-- **application.yml** : Configuration complète
-  - Paramètres de connexion Kafka
-  - Configuration de l'API Gateway
-  - Autres paramètres applicatifs
-
-#### Dossier `logs/`
-Les fichiers de log seront automatiquement générés dans ce dossier :
-- **ibcproxy.log** : Logs générés par le framework de logging
-- **console.log** : Capture de la sortie console de l'application
-
-#### Dossier `script/`
-Contient les utilitaires de gestion :
-- **manage.sh** : Script de contrôle qui permet de :
-  - Démarrer l'application
-  - Arrêter l'application
-  - Vérifier son statut
-  - Redémarrer l'application
-
-## Démarrage rapide
-
-### Installation
-1. Copiez le dossier `integration` sur votre serveur CentOS
-2. Rendez le script executable: `chmod +x integration/script/manage.sh`
-3. Ajustez la configuration dans `conf/jbcproxy.cfg` et `etc/application.yml`
-
-### Utilisation
-```bash
-# Démarrer le service
-./integration/script/manage.sh start
-
-# Vérifier l'état
-./integration/script/manage.sh status
-
-# Arrêter le service
-./integration/script/manage.sh stop
-
-# Redémarrer
-./integration/script/manage.sh restart
-```
-
-## Configuration
-
-### Kafka
-Configuration dans `application.yml` :
-- Serveurs bootstrap
-- Topics consommés
-- Groupes de consommateurs
-- Paramètres de sérialisation/désérialisation
-
-### API Gateway
-- URL de l'API Gateway
-- Paramètres d'authentification
-- Timeouts et retry policies
-
-## Logs
-Les logs de l'application sont disponibles dans le dossier `logs/`
-
-## Support
-Pour toute assistance, veuillez contacter l'équipe technique.
+// Ajout de la tâche distrib à la tâche build
+build.dependsOn distrib
