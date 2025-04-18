@@ -1,3 +1,6 @@
+echo -n "curl http://localhost:8080/actuator/health" | tr -d '\n' | bash
+
+
 // Ajoutez ce bloc dans votre fichier build.gradle
 
 plugins {
