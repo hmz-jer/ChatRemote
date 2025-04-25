@@ -1,28 +1,64 @@
- Ok, je comprends. Nous allons créer notre propre PKI depuis zéro pour tester le flux d'authentification MTLS dans le cadre du système de vérification IBAN.
+ Pour créer un PKI spécifique à la société STET, en accord avec le workflow décrit dans vos documents précédents, nous allons adapter notre approche. Selon les informations fournies, STET génère la bi-clé (clé privée et CSR) et ne fournit que la clé publique aux participants.
 
-Voici comment nous pouvons procéder étape par étape :
+Voici comment nous pouvons mettre en place un PKI simulant ce modèle:
 
-1. **Créer notre propre Autorité de Certification (CA)**
+1. **Créer l'infrastructure de base**
 
 ```bash
-# Créer un répertoire pour notre PKI
-mkdir -p pki_test/ca pki_test/certs
-
-# Générer la clé privée de la CA
-openssl genrsa -out pki_test/ca/ca.key 4096
-
-# Générer le certificat auto-signé de la CA
-openssl req -x509 -new -nodes -key pki_test/ca/ca.key -sha256 -days 1825 -out pki_test/ca/ca.crt -subj "/C=FR/O=Test PKI/OU=CA/CN=Test Root CA"
+# Créer un répertoire pour notre PKI STET
+mkdir -p pki_stet/{ca,intermediates,participants,certs}
 ```
 
-2. **Créer un certificat QWAC pour notre client**
+2. **Créer une autorité de certification racine**
 
 ```bash
-# Générer une clé privée pour le certificat QWAC
-openssl genrsa -out pki_test/certs/qwac.key 2048
+# Générer la clé privée de la CA racine
+openssl genrsa -out pki_stet/ca/root-ca.key 4096
 
-# Créer un fichier de configuration pour notre CSR
-cat > pki_test/certs/qwac.conf << EOF
+# Générer le certificat auto-signé de la CA racine
+openssl req -x509 -new -nodes -key pki_stet/ca/root-ca.key -sha256 -days 3650 -out pki_stet/ca/root-ca.crt -subj "/C=FR/O=STET CA/OU=PKI/CN=STET Root CA"
+```
+
+3. **Créer une autorité de certification intermédiaire pour les QWAC**
+
+```bash
+# Générer la clé privée pour la CA intermédiaire
+openssl genrsa -out pki_stet/intermediates/qwac-ca.key 4096
+
+# Créer un fichier de configuration pour la CA intermédiaire
+cat > pki_stet/intermediates/qwac-ca.conf << EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_ca
+prompt = no
+
+[req_distinguished_name]
+C = FR
+O = STET
+OU = QWAC Authority
+CN = STET QWAC CA
+
+[v3_ca]
+basicConstraints = critical, CA:true, pathlen:0
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign
+subjectKeyIdentifier = hash
+EOF
+
+# Générer la demande de certificat pour la CA intermédiaire
+openssl req -new -key pki_stet/intermediates/qwac-ca.key -out pki_stet/intermediates/qwac-ca.csr -config pki_stet/intermediates/qwac-ca.conf
+
+# Signer la CA intermédiaire avec la CA racine
+openssl x509 -req -in pki_stet/intermediates/qwac-ca.csr -CA pki_stet/ca/root-ca.crt -CAkey pki_stet/ca/root-ca.key -CAcreateserial -out pki_stet/intermediates/qwac-ca.crt -days 1825 -sha256 -extensions v3_ca -extfile pki_stet/intermediates/qwac-ca.conf
+```
+
+4. **Créer une bi-clé pour un participant (simulant le processus STET)**
+
+```bash
+# Générer la clé privée pour le participant
+openssl genrsa -out pki_stet/participants/participant1.key 2048
+
+# Créer un fichier de configuration pour le CSR du participant
+cat > pki_stet/participants/participant1.conf << EOF
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
@@ -30,11 +66,11 @@ prompt = no
 
 [req_distinguished_name]
 C = FR
-O = Votre Société
-OU = 0002 552120222
-CN = dsp2.votresociete.fr
-L = PARIS
+O = Participant Bancaire
+OU = 0002 123456789
+CN = api.participant.fr
 2.5.4.97 = PSDFR-ACPR-30003
+L = PARIS
 
 [v3_req]
 basicConstraints = CA:FALSE
@@ -43,24 +79,42 @@ extendedKeyUsage = serverAuth, clientAuth
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = dsp2.votresociete.fr
+DNS.1 = api.participant.fr
 EOF
 
-# Générer la demande de certificat (CSR)
-openssl req -new -key pki_test/certs/qwac.key -out pki_test/certs/qwac.csr -config pki_test/certs/qwac.conf
-
-# Signer la demande avec notre CA
-openssl x509 -req -in pki_test/certs/qwac.csr -CA pki_test/ca/ca.crt -CAkey pki_test/ca/ca.key -CAcreateserial -out pki_test/certs/qwac.crt -days 730 -sha256 -extensions v3_req -extfile pki_test/certs/qwac.conf
+# Générer le CSR (STET génère la bi-clé selon les spécifications)
+openssl req -new -key pki_stet/participants/participant1.key -out pki_stet/participants/participant1.csr -config pki_stet/participants/participant1.conf
 ```
 
-3. **Créer un certificat pour le serveur VOP**
+5. **Signer le certificat du participant (par l'autorité QWAC intermédiaire)**
 
 ```bash
-# Générer une clé privée pour le serveur VOP
-openssl genrsa -out pki_test/certs/vop_server.key 2048
+# Signer le CSR pour créer le certificat
+openssl x509 -req -in pki_stet/participants/participant1.csr -CA pki_stet/intermediates/qwac-ca.crt -CAkey pki_stet/intermediates/qwac-ca.key -CAcreateserial -out pki_stet/participants/participant1.crt -days 730 -sha256 -extensions v3_req -extfile pki_stet/participants/participant1.conf
+```
+
+6. **Extraire la clé publique (ce que STET fournirait au participant)**
+
+```bash
+# Extraire la clé publique du certificat
+openssl x509 -in pki_stet/participants/participant1.crt -pubkey -noout > pki_stet/participants/participant1.pub
+```
+
+7. **Créer un PKCS#12 pour le participant (que STET conserverait)**
+
+```bash
+# Créer un PKCS#12 pour utilisation
+openssl pkcs12 -export -out pki_stet/participants/participant1.p12 -inkey pki_stet/participants/participant1.key -in pki_stet/participants/participant1.crt -certfile pki_stet/intermediates/qwac-ca.crt -CAfile pki_stet/ca/root-ca.crt -name "Participant 1" -passout pass:password
+```
+
+8. **Créer un certificat pour le serveur PSP Externe VOP**
+
+```bash
+# Générer la clé privée pour le serveur VOP
+openssl genrsa -out pki_stet/certs/vop_server.key 2048
 
 # Créer un fichier de configuration pour le serveur VOP
-cat > pki_test/certs/vop_server.conf << EOF
+cat > pki_stet/certs/vop_server.conf << EOF
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
@@ -69,8 +123,8 @@ prompt = no
 [req_distinguished_name]
 C = FR
 O = PSP Externe VOP
-OU = Test
-CN = vop.test.local
+OU = Systèmes
+CN = vop.psp.fr
 
 [v3_req]
 basicConstraints = CA:FALSE
@@ -79,137 +133,79 @@ extendedKeyUsage = serverAuth
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = vop.test.local
+DNS.1 = vop.psp.fr
 DNS.2 = localhost
 IP.1 = 127.0.0.1
 EOF
 
-# Générer la demande de certificat (CSR)
-openssl req -new -key pki_test/certs/vop_server.key -out pki_test/certs/vop_server.csr -config pki_test/certs/vop_server.conf
+# Générer la demande de certificat
+openssl req -new -key pki_stet/certs/vop_server.key -out pki_stet/certs/vop_server.csr -config pki_stet/certs/vop_server.conf
 
-# Signer la demande avec notre CA
-openssl x509 -req -in pki_test/certs/vop_server.csr -CA pki_test/ca/ca.crt -CAkey pki_test/ca/ca.key -CAcreateserial -out pki_test/certs/vop_server.crt -days 730 -sha256 -extensions v3_req -extfile pki_test/certs/vop_server.conf
+# Signer avec notre CA intermédiaire
+openssl x509 -req -in pki_stet/certs/vop_server.csr -CA pki_stet/intermediates/qwac-ca.crt -CAkey pki_stet/intermediates/qwac-ca.key -CAcreateserial -out pki_stet/certs/vop_server.crt -days 730 -sha256 -extensions v3_req -extfile pki_stet/certs/vop_server.conf
 ```
 
-4. **Créer les formats PKCS#12 pour utilisation**
+9. **Créer un certificat pour l'API Gateway**
 
 ```bash
-# Créer un PKCS#12 pour le client (QWAC)
-openssl pkcs12 -export -out pki_test/certs/qwac.p12 -inkey pki_test/certs/qwac.key -in pki_test/certs/qwac.crt -certfile pki_test/ca/ca.crt -name "QWAC Test Cert" -passout pass:password
+# Générer la clé privée pour l'API Gateway
+openssl genrsa -out pki_stet/certs/api_gateway.key 2048
 
+# Créer un fichier de configuration pour l'API Gateway
+cat > pki_stet/certs/api_gateway.conf << EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = FR
+O = STET
+OU = API Gateway
+CN = api-gateway.stet.fr
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = api-gateway.stet.fr
+DNS.2 = localhost
+IP.1 = 127.0.0.1
+EOF
+
+# Générer la demande de certificat
+openssl req -new -key pki_stet/certs/api_gateway.key -out pki_stet/certs/api_gateway.csr -config pki_stet/certs/api_gateway.conf
+
+# Signer avec notre CA intermédiaire
+openssl x509 -req -in pki_stet/certs/api_gateway.csr -CA pki_stet/intermediates/qwac-ca.crt -CAkey pki_stet/intermediates/qwac-ca.key -CAcreateserial -out pki_stet/certs/api_gateway.crt -days 730 -sha256 -extensions v3_req -extfile pki_stet/certs/api_gateway.conf
+```
+
+10. **Créer les keystores et truststores pour le test**
+
+```bash
 # Créer un PKCS#12 pour le serveur VOP
-openssl pkcs12 -export -out pki_test/certs/vop_server.p12 -inkey pki_test/certs/vop_server.key -in pki_test/certs/vop_server.crt -certfile pki_test/ca/ca.crt -name "VOP Server" -passout pass:password
+openssl pkcs12 -export -out pki_stet/certs/vop_server.p12 -inkey pki_stet/certs/vop_server.key -in pki_stet/certs/vop_server.crt -certfile pki_stet/intermediates/qwac-ca.crt -CAfile pki_stet/ca/root-ca.crt -name "VOP Server" -passout pass:password
+
+# Créer un PKCS#12 pour l'API Gateway
+openssl pkcs12 -export -out pki_stet/certs/api_gateway.p12 -inkey pki_stet/certs/api_gateway.key -in pki_stet/certs/api_gateway.crt -certfile pki_stet/intermediates/qwac-ca.crt -CAfile pki_stet/ca/root-ca.crt -name "API Gateway" -passout pass:password
+
+# Créer un truststore JKS qui contient la CA racine
+keytool -import -trustcacerts -alias root-ca -file pki_stet/ca/root-ca.crt -keystore pki_stet/certs/truststore.jks -storepass password -noprompt
+
+# Créer un truststore JKS qui contient la CA intermédiaire QWAC
+keytool -import -trustcacerts -alias qwac-ca -file pki_stet/intermediates/qwac-ca.crt -keystore pki_stet/certs/truststore.jks -storepass password -noprompt
 ```
 
-5. **Créer un Truststore Java pour le serveur VOP**
+11. **Créer un fichier de chaîne de confiance pour les tests**
 
 ```bash
-# Convertir le certificat CA en format JKS
-keytool -import -trustcacerts -alias testca -file pki_test/ca/ca.crt -keystore pki_test/certs/truststore.jks -storepass password -noprompt
+# Concaténer les certificats pour avoir la chaîne complète
+cat pki_stet/intermediates/qwac-ca.crt pki_stet/ca/root-ca.crt > pki_stet/certs/chain.pem
 ```
 
-6. **Mettre en place un serveur mock VOP**
+Cette configuration simule le modèle décrit dans vos documents, où STET génère la bi-clé et les participants utilisent les certificats pour l'authentification MTLS avec les PSP Externes VOP. Le certificateEmitterId (PSDFR-ACPR-30003) est inclus dans le certificat comme indiqué dans l'image du certificat QWAC que vous avez partagée.
 
-Créez un projet Spring Boot simple avec la configuration suivante:
-
-```java
-// VopApplication.java
-@SpringBootApplication
-public class VopApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(VopApplication.class, args);
-    }
-}
-
-// VopController.java
-@RestController
-public class VopController {
-    
-    private static final Logger logger = LoggerFactory.getLogger(VopController.class);
-    
-    @PostMapping("/ibancheck")
-    public ResponseEntity<?> checkIban(@RequestBody Map<String, Object> request, HttpServletRequest servletRequest) {
-        // Récupérer le certificat client
-        X509Certificate[] certs = (X509Certificate[]) servletRequest
-            .getAttribute("javax.servlet.request.X509Certificate");
-        
-        if (certs == null || certs.length == 0) {
-            logger.error("Aucun certificat client trouvé");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("status", "ERROR", "message", "Certificat manquant"));
-        }
-        
-        // Analyser le certificat
-        X509Certificate clientCert = certs[0];
-        String subject = clientCert.getSubjectX500Principal().getName();
-        logger.info("Certificat client reçu: {}", subject);
-        
-        // Extraire le certificateEmitterId (dans ce cas, on utilise l'identifiant PSDFR-ACPR-XXXXX)
-        String certificateEmitterId = "";
-        Pattern pattern = Pattern.compile("2\\.5\\.4\\.97=([^,]+)");
-        Matcher matcher = pattern.matcher(subject);
-        if (matcher.find()) {
-            certificateEmitterId = matcher.group(1);
-            logger.info("CertificateEmitterId extrait: {}", certificateEmitterId);
-        }
-        
-        // Simuler la vérification d'IBAN
-        String iban = (String) request.get("iban");
-        boolean isValid = iban != null && iban.startsWith("FR") && iban.length() >= 20;
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", isValid ? "SUCCESS" : "ERROR");
-        response.put("valid", isValid);
-        response.put("certificateEmitterId", certificateEmitterId);
-        response.put("timestamp", System.currentTimeMillis());
-        
-        return ResponseEntity.ok(response);
-    }
-}
-```
-
-```properties
-# application.properties
-server.port=8443
-server.ssl.enabled=true
-server.ssl.key-store=classpath:vop_server.p12
-server.ssl.key-store-password=password
-server.ssl.key-store-type=PKCS12
-server.ssl.trust-store=classpath:truststore.jks
-server.ssl.trust-store-password=password
-server.ssl.client-auth=need
-logging.level.org.springframework.web=DEBUG
-```
-
-7. **Tester l'authentification MTLS**
-
-```bash
-# Test avec curl
-curl --cert pki_test/certs/qwac.p12:password --cert-type p12 --cacert pki_test/ca/ca.crt -k https://localhost:8443/ibancheck -H "Content-Type: application/json" -d '{"iban":"FR7630001007941234567890185"}'
-```
-
-8. **Simuler l'API Gateway**
-
-Pour un test plus complet, vous pourriez utiliser Nginx comme proxy pour simuler l'API Gateway:
-
-```
-# nginx.conf
-server {
-    listen 443 ssl;
-    server_name api-gateway.test.local;
-    
-    ssl_certificate /path/to/pki_test/certs/api_gateway.crt;
-    ssl_certificate_key /path/to/pki_test/certs/api_gateway.key;
-    ssl_client_certificate /path/to/pki_test/ca/ca.crt;
-    ssl_verify_client on;
-    
-    location /ibancheck_outbound {
-        proxy_pass https://localhost:8443/ibancheck;
-        proxy_ssl_certificate /path/to/pki_test/certs/qwac.crt;
-        proxy_ssl_certificate_key /path/to/pki_test/certs/qwac.key;
-        proxy_ssl_trusted_certificate /path/to/pki_test/ca/ca.crt;
-        proxy_ssl_verify on;
-    }
-}
-```
-
-Cette approche vous permettra de créer un environnement complet pour tester l'authentification MTLS dans le flux IBAN check, en partant de votre propre PKI. Vous pourrez ensuite adapter les certificats selon vos besoins spécifiques et tester différents scénarios.
+Vous pouvez maintenant utiliser ces certificats pour mettre en place votre environnement de test avec les composants du système (mock VOP, API Gateway, etc.) comme décrit précédemment.
