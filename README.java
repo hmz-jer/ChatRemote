@@ -1,55 +1,151 @@
- package com.example.kafkamock.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+package com.example.kafkamock.service;
+
+import com.example.kafkamock.model.Message;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
- * Modèle de message utilisé pour communiquer avec Kafka
- * Cette classe définit la structure des messages échangés entre le mock et le proxy Java
+ * Service qui gère l'envoi et la réception des messages Kafka
  */
-@Data
-@Builder
-@AllArgsConstructor
-@NoArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class Message {
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class KafkaService {
+
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
+    
+    @Value("${kafka.topic.outbound}")
+    private String outboundTopic;
+    
+    // Stockage des messages envoyés et reçus pour le suivi
+    private final ConcurrentMap<String, Message> sentMessages = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Message> receivedMessages = new ConcurrentHashMap<>();
+
     /**
-     * Identifiant unique du message
+     * Envoie un message sur le topic outbound (topicA)
+     * 
+     * @param content Le contenu du message à envoyer
+     * @return L'objet Message créé et envoyé
      */
-    private String id;
+    public Message sendMessage(String content) {
+        Message message = Message.builder()
+                .id(UUID.randomUUID().toString())
+                .content(content)
+                .timestamp(LocalDateTime.now())
+                .status(Message.MessageStatus.SENT)
+                .build();
+                
+        try {
+            String messageJson = objectMapper.writeValueAsString(message);
+            log.info("Envoi d'un message sur le topic {}: {}", outboundTopic, messageJson);
+            
+            CompletableFuture<SendResult<String, String>> future = 
+                kafkaTemplate.send(outboundTopic, message.getId(), messageJson);
+                
+            future.whenComplete((result, ex) -> {
+                if (ex == null) {
+                    log.info("Message envoyé avec succès: {}", message.getId());
+                    sentMessages.put(message.getId(), message);
+                } else {
+                    log.error("Échec de l'envoi du message: {}", ex.getMessage(), ex);
+                    message.setStatus(Message.MessageStatus.ERROR);
+                }
+            });
+            
+            return message;
+        } catch (JsonProcessingException e) {
+            log.error("Erreur lors de la sérialisation du message", e);
+            message.setStatus(Message.MessageStatus.ERROR);
+            return message;
+        }
+    }
+
+    /**
+     * Écoute le topic inbound (topicB) pour recevoir les réponses du proxy Java
+     * 
+     * @param message Le message reçu sous forme de chaîne JSON
+     * @param ack L'objet Acknowledgment pour confirmer la réception
+     */
+    @KafkaListener(topics = "${kafka.topic.inbound}", groupId = "${spring.kafka.consumer.group-id}")
+    public void consumeMessage(String message, Acknowledgment ack) {
+        log.info("Message reçu du topic: {}", message);
+        
+        try {
+            Message receivedMessage = objectMapper.readValue(message, Message.class);
+            receivedMessage.setStatus(Message.MessageStatus.RECEIVED);
+            receivedMessages.put(receivedMessage.getId(), receivedMessage);
+            
+            // Vérifier si ce message est une réponse à un message envoyé
+            if (sentMessages.containsKey(receivedMessage.getId())) {
+                log.info("Réponse reçue pour le message: {}", receivedMessage.getId());
+            }
+            
+            ack.acknowledge();
+        } catch (JsonProcessingException e) {
+            log.error("Erreur lors de la désérialisation du message", e);
+        }
+    }
     
     /**
-     * Contenu du message
+     * Récupère tous les messages envoyés
+     * 
+     * @return Map des messages envoyés
      */
-    private String content;
+    public ConcurrentMap<String, Message> getSentMessages() {
+        return sentMessages;
+    }
     
     /**
-     * Timestamp de création du message
+     * Récupère tous les messages reçus
+     * 
+     * @return Map des messages reçus
      */
-    private LocalDateTime timestamp;
+    public ConcurrentMap<String, Message> getReceivedMessages() {
+        return receivedMessages;
+    }
     
     /**
-     * Statut actuel du message
+     * Récupère un message envoyé par son ID
+     * 
+     * @param id L'ID du message
+     * @return Le message ou null s'il n'existe pas
      */
-    private MessageStatus status;
+    public Message getSentMessageById(String id) {
+        return sentMessages.get(id);
+    }
     
     /**
-     * Métadonnées additionnelles (optionnelles)
+     * Récupère un message reçu par son ID
+     * 
+     * @param id L'ID du message
+     * @return Le message ou null s'il n'existe pas
      */
-    private String metadata;
+    public Message getReceivedMessageById(String id) {
+        return receivedMessages.get(id);
+    }
     
     /**
-     * Types de statuts possibles pour un message
+     * Efface les messages envoyés et reçus
      */
-    public enum MessageStatus {
-        SENT,       // Message envoyé
-        RECEIVED,   // Message reçu
-        PROCESSED,  // Message traité
-        ERROR       // Erreur lors du traitement
+    public void clearMessages() {
+        sentMessages.clear();
+        receivedMessages.clear();
+        log.info("Tous les messages ont été effacés");
     }
 }
