@@ -1,42 +1,80 @@
- package com.example.kafkamock.scheduler;
+ // src/main/resources/application.yaml
+server:
+  port: 8080
 
-import com.example.kafkamock.service.KafkaService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
+spring:
+  application:
+    name: kafka-mock
+  kafka:
+    bootstrap-servers: localhost:9093
+    properties:
+      security.protocol: SSL
+      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/etc/kafka-mock/ssl/client.truststore.jks}
+      ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD:truststorepassword}
+      ssl.keystore.location: ${KAFKA_KEYSTORE_LOCATION:/etc/kafka-mock/ssl/client.keystore.jks}
+      ssl.keystore.password: ${KAFKA_KEYSTORE_PASSWORD:keystorepassword}
+      ssl.key.password: ${KAFKA_KEY_PASSWORD:keypassword}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: kafka-mock-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
 
-import java.time.LocalDateTime;
-import java.util.UUID;
+kafka:
+  topic:
+    outbound: topicA
+    inbound: topicB
 
-/**
- * Planificateur pour envoyer des messages périodiquement
- * Permet de tester automatiquement le flux sans intervention manuelle
- */
-@Component
-@Slf4j
-@RequiredArgsConstructor
-public class MessageScheduler {
+scheduler:
+  enabled: false
+  interval: 60000
 
-    private final KafkaService kafkaService;
+logging:
+  level:
+    root: INFO
+    com.example.kafkamock: DEBUG
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+  file:
+    name: ${LOG_DIR:/var/log/kafka-mock}/kafka-mock.log
     
-    @Value("${scheduler.enabled:false}")
-    private boolean schedulerEnabled;
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
 
-    /**
-     * Envoie un message à intervalles réguliers si activé
-     * L'intervalle est configurable dans application.properties
-     */
-    @Scheduled(fixedRateString = "${scheduler.interval:60000}")
-    public void sendPeriodicMessage() {
-        if (schedulerEnabled) {
-            String content = String.format("Message automatique %s envoyé à %s", 
-                UUID.randomUUID(), 
-                LocalDateTime.now());
-                
-            log.info("Envoi d'un message planifié: {}", content);
-            kafkaService.sendMessage(content);
-        }
-    }
-}
+---
+# Configuration de développement
+spring:
+  config:
+    activate:
+      on-profile: dev
+    
+server:
+  port: 8081
+
+scheduler:
+  enabled: true
+  interval: 30000
+
+---
+# Configuration de test
+spring:
+  config:
+    activate:
+      on-profile: test
+      
+kafka:
+  topic:
+    outbound: test-topicA
+    inbound: test-topicB
