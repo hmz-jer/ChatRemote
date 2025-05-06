@@ -1,47 +1,67 @@
- package com.example.kafkamock.service;
+ package com.example.kafkamock.controller;
 
 import com.example.kafkamock.model.Message;
+import com.example.kafkamock.service.MetricsService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
- * Service qui fournit des métriques sur les messages
- * Permet de suivre les performances et le taux de réussite du flux
+ * Contrôleur REST pour accéder aux métriques du mock Kafka
  */
-@Service
+@RestController
+@RequestMapping("/api/metrics")
 @RequiredArgsConstructor
-public class MetricsService {
+@Slf4j
+public class MetricsController {
 
-    private final KafkaService kafkaService;
-    
+    private final MetricsService metricsService;
+
     /**
-     * Récupère le nombre total de messages envoyés
+     * Récupère les métriques globales du mock
      * 
-     * @return Nombre de messages envoyés
+     * @return Map contenant les métriques
      */
-    public int getTotalSentMessages() {
-        return kafkaService.getSentMessages().size();
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getMetrics() {
+        log.info("Récupération des métriques globales");
+        
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put("totalSent", metricsService.getTotalSentMessages());
+        metrics.put("totalReceived", metricsService.getTotalReceivedMessages());
+        metrics.put("successRate", metricsService.getSuccessRate());
+        metrics.put("averageResponseTime", metricsService.getAverageResponseTime());
+        metrics.put("last24Hours", metricsService.getLast24HoursStats());
+        metrics.put("errorCount", metricsService.getErrorMessages().size());
+        
+        return ResponseEntity.ok(metrics);
     }
     
     /**
-     * Récupère le nombre total de messages reçus
+     * Récupère les messages en erreur
      * 
-     * @return Nombre de messages reçus
+     * @return Map des messages en erreur
      */
-    public int getTotalReceivedMessages() {
-        return kafkaService.getReceivedMessages().size();
+    @GetMapping("/errors")
+    public ResponseEntity<Map<String, Message>> getErrorMessages() {
+        log.info("Récupération des messages en erreur");
+        return ResponseEntity.ok(metricsService.getErrorMessages());
     }
     
     /**
-     * Calcule le taux de réussite (messages reçus / messages envoyés)
+     * Récupère un résumé des statistiques pour les dernières 24 heures
      * 
-     * @return Taux de réussite en pourcentage
+     * @return Map contenant les statistiques
      */
-    public double getSuccessRate() {
+    @GetMapping("/last24hours")
+    public ResponseEntity<Map<String, Object>> getLast24HoursStats() {
+        log.info("Récupération des statistiques des dernières 24 heures");
+        return ResponseEntity.ok(metricsService.getLast24HoursStats());
+    }
+}
