@@ -1,80 +1,28 @@
- // src/main/resources/application.yaml
-server:
-  port: 8080
+package com.example.kafkamock.config;
 
-spring:
-  application:
-    name: kafka-mock
-  kafka:
-    bootstrap-servers: localhost:9093
-    properties:
-      security.protocol: SSL
-      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION:/etc/kafka-mock/ssl/client.truststore.jks}
-      ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD:truststorepassword}
-      ssl.keystore.location: ${KAFKA_KEYSTORE_LOCATION:/etc/kafka-mock/ssl/client.keystore.jks}
-      ssl.keystore.password: ${KAFKA_KEYSTORE_PASSWORD:keystorepassword}
-      ssl.key.password: ${KAFKA_KEY_PASSWORD:keypassword}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all
-      retries: 3
-    consumer:
-      group-id: kafka-mock-group
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      enable-auto-commit: false
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-kafka:
-  topic:
-    outbound: topicA
-    inbound: topicB
+/**
+ * Configuration pour l'ObjectMapper JSON
+ * Permet de gérer correctement les dates et formats de sérialisation
+ */
+@Configuration
+public class JsonConfig {
 
-scheduler:
-  enabled: false
-  interval: 60000
-
-logging:
-  level:
-    root: INFO
-    com.example.kafkamock: DEBUG
-    org.apache.kafka: WARN
-    org.springframework.kafka: WARN
-  file:
-    name: ${LOG_DIR:/var/log/kafka-mock}/kafka-mock.log
-    
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
-
----
-# Configuration de développement
-spring:
-  config:
-    activate:
-      on-profile: dev
-    
-server:
-  port: 8081
-
-scheduler:
-  enabled: true
-  interval: 30000
-
----
-# Configuration de test
-spring:
-  config:
-    activate:
-      on-profile: test
-      
-kafka:
-  topic:
-    outbound: test-topicA
-    inbound: test-topicB
+    /**
+     * Configure l'ObjectMapper pour gérer les dates et types Java correctement
+     * 
+     * @return ObjectMapper configuré
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return objectMapper;
+    }
+}
