@@ -1,5 +1,4 @@
-
-package com.example.kafkamock.service;
+ package com.example.kafkamock.service;
 
 import com.example.kafkamock.model.Message;
 import com.fasterxml.jackson.core.JsonProcessingException;
