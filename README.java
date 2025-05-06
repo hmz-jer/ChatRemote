@@ -1,202 +1,130 @@
- package com.example.kafkamock.service;
+  package com.example.kafkamock.service;
 
 import com.example.kafkamock.model.Message;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Service qui fournit des métriques sur les messages
- * Permet de suivre les performances et le taux de réussite du flux
+ * Service pour exécuter des tests de charge sur le flux Kafka
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
-public class MetricsService {
+public class TestService {
 
     private final KafkaService kafkaService;
     
-    /**
-     * Récupère le nombre total de messages envoyés
-     * 
-     * @return Nombre de messages envoyés
-     */
-    public int getTotalSentMessages() {
-        return kafkaService.getSentMessages().size();
-    }
+    @Value("${test.max-threads:10}")
+    private int maxThreads;
+    
+    @Value("${test.timeout-seconds:60}")
+    private int timeoutSeconds;
     
     /**
-     * Récupère le nombre total de messages reçus
+     * Exécute un test de charge en envoyant plusieurs messages simultanément
      * 
-     * @return Nombre de messages reçus
+     * @param messageCount Nombre de messages à envoyer
+     * @param messageTemplate Modèle de message à utiliser
+     * @return Liste des messages envoyés
      */
-    public int getTotalReceivedMessages() {
-        return kafkaService.getReceivedMessages().size();
-    }
-    
-    /**
-     * Calcule le taux de réussite (messages reçus / messages envoyés)
-     * 
-     * @return Taux de réussite en pourcentage
-     */
-    public double getSuccessRate() {
-        int sent = getTotalSentMessages();
-        if (sent == 0) {
-            return 0.0;
-        }
+    public List<Message> runLoadTest(int messageCount, String messageTemplate) {
+        log.info("Démarrage d'un test de charge avec {} messages", messageCount);
         
-        int received = getTotalReceivedMessages();
-        return (double) received / sent * 100.0;
-    }
-    
-    /**
-     * Calcule le temps de réponse moyen pour les messages
-     * 
-     * @return Temps de réponse moyen en millisecondes
-     */
-    public long getAverageResponseTime() {
-        ConcurrentMap<String, Message> sentMessages = kafkaService.getSentMessages();
-        ConcurrentMap<String, Message> receivedMessages = kafkaService.getReceivedMessages();
-        
-        AtomicInteger count = new AtomicInteger(0);
-        long totalDuration = sentMessages.entrySet().stream()
-            .filter(entry -> receivedMessages.containsKey(entry.getKey()))
-            .mapToLong(entry -> {
-                Message sent = entry.getValue();
-                Message received = receivedMessages.get(entry.getKey());
-                count.incrementAndGet();
-                return Duration.between(sent.getTimestamp(), received.getTimestamp()).toMillis();
-            })
-            .sum();
-        
-        return count.get() > 0 ? totalDuration / count.get() : 0;
-    }
-    
-    /**
-     * Récupère les statistiques des messages des dernières 24 heures
-     * 
-     * @return Map contenant les statistiques
-     */
-    public Map<String, Object> getLast24HoursStats() {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
-        
-        long recentSent = kafkaService.getSentMessages().values().stream()
-            .filter(message -> message.getTimestamp().isAfter(cutoff))
-            .count();
-            
-        long recentReceived = kafkaService.getReceivedMessages().values().stream()
-            .filter(message -> message.getTimestamp().isAfter(cutoff))
-            .count();
-            
-        double recentSuccessRate = recentSent > 0 ? (double) recentReceived / recentSent * 100.0 : 0.0;
-        
-        return Map.of(
-            "sent", recentSent,
-            "received", recentReceived,
-            "successRate", recentSuccessRate
-        );
-    }
-    
-    /**
-     * Récupère les messages en erreur
-     * 
-     * @return Map des messages en erreur
-     */
-    public Map<String, Message> getErrorMessages() {
-        return kafkaService.getSentMessages().values().stream()
-            .filter(message -> message.getStatus() == Message.MessageStatus.ERROR)
-            .collect(Collectors.toMap(Message::getId, message -> message));
-    }
-    
-    /**
-     * Calcule le temps de réponse médian pour les messages
-     * 
-     * @return Temps de réponse médian en millisecondes
-     */
-    public long getMedianResponseTime() {
-        ConcurrentMap<String, Message> sentMessages = kafkaService.getSentMessages();
-        ConcurrentMap<String, Message> receivedMessages = kafkaService.getReceivedMessages();
-        
-        long[] responseTimes = sentMessages.entrySet().stream()
-            .filter(entry -> receivedMessages.containsKey(entry.getKey()))
-            .mapToLong(entry -> {
-                Message sent = entry.getValue();
-                Message received = receivedMessages.get(entry.getKey());
-                return Duration.between(sent.getTimestamp(), received.getTimestamp()).toMillis();
-            })
-            .sorted()
-            .toArray();
-            
-        if (responseTimes.length == 0) {
-            return 0;
-        }
-        
-        if (responseTimes.length % 2 == 0) {
-            return (responseTimes[responseTimes.length / 2 - 1] + responseTimes[responseTimes.length / 2]) / 2;
-        } else {
-            return responseTimes[responseTimes.length / 2];
-        }
-    }
-    
-    /**
-     * Calcule le nombre de messages par statut
-     * 
-     * @return Map avec le compte de messages par statut
-     */
-    public Map<Message.MessageStatus, Long> getMessageCountByStatus() {
-        // Compter les messages envoyés par statut
-        Map<Message.MessageStatus, Long> sentByStatus = kafkaService.getSentMessages().values().stream()
-            .collect(Collectors.groupingBy(Message::getStatus, Collectors.counting()));
-            
-        // Compter les messages reçus par statut
-        Map<Message.MessageStatus, Long> receivedByStatus = kafkaService.getReceivedMessages().values().stream()
-            .collect(Collectors.groupingBy(Message::getStatus, Collectors.counting()));
-            
-        // Fusionner les deux maps
-        receivedByStatus.forEach((status, count) -> 
-            sentByStatus.merge(status, count, Long::sum)
+        List<Message> sentMessages = new ArrayList<>();
+        ExecutorService executor = Executors.newFixedThreadPool(
+            Math.min(messageCount, maxThreads)
         );
         
-        return sentByStatus;
-    }
-    
-    /**
-     * Calcule le taux d'erreur des messages
-     * 
-     * @return Taux d'erreur en pourcentage
-     */
-    public double getErrorRate() {
-        int totalMessages = getTotalSentMessages();
-        if (totalMessages == 0) {
-            return 0.0;
+        List<CompletableFuture<Message>> futures = new ArrayList<>();
+        
+        for (int i = 0; i < messageCount; i++) {
+            final int messageIndex = i;
+            CompletableFuture<Message> future = CompletableFuture.supplyAsync(() -> {
+                String content = String.format("%s - %d (%s)", 
+                    messageTemplate, 
+                    messageIndex,
+                    UUID.randomUUID());
+                    
+                return kafkaService.sendMessage(content);
+            }, executor);
+            
+            futures.add(future);
         }
         
-        long errorCount = getErrorMessages().size();
-        return (double) errorCount / totalMessages * 100.0;
+        try {
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+            );
+            
+            allFutures.get(timeoutSeconds, TimeUnit.SECONDS);
+            
+            for (CompletableFuture<Message> future : futures) {
+                sentMessages.add(future.get());
+            }
+            
+            log.info("Test de charge terminé, {} messages envoyés", sentMessages.size());
+        } catch (Exception e) {
+            log.error("Erreur lors du test de charge", e);
+        } finally {
+            executor.shutdown();
+        }
+        
+        return sentMessages;
     }
     
     /**
-     * Génère un rapport complet de métriques
+     * Attend que tous les messages du test reçoivent une réponse
      * 
-     * @return Map contenant toutes les métriques
+     * @param sentMessages Liste des messages envoyés
+     * @param timeoutSeconds Délai d'attente maximum en secondes
+     * @return Pourcentage de messages ayant reçu une réponse
      */
-    public Map<String, Object> getCompleteMetricsReport() {
-        return Map.of(
-            "totalSent", getTotalSentMessages(),
-            "totalReceived", getTotalReceivedMessages(),
-            "successRate", getSuccessRate(),
-            "errorRate", getErrorRate(),
-            "averageResponseTime", getAverageResponseTime(),
-            "medianResponseTime", getMedianResponseTime(),
-            "messagesByStatus", getMessageCountByStatus(),
-            "last24Hours", getLast24HoursStats(),
-            "errorCount", getErrorMessages().size(),
-            "timestamp", LocalDateTime.now()
-        );
+    public double waitForResponses(List<Message> sentMessages, int timeoutSeconds) {
+        log.info("Attente des réponses pour {} messages", sentMessages.size());
+        
+        LocalDateTime startTime = LocalDateTime.now();
+        int totalMessages = sentMessages.size();
+        int receivedCount = 0;
+        
+        while (Duration.between(startTime, LocalDateTime.now()).getSeconds() < timeoutSeconds) {
+            receivedCount = 0;
+            
+            for (Message message : sentMessages) {
+                if (kafkaService.getReceivedMessageById(message.getId()) != null) {
+                    receivedCount++;
+                }
+            }
+            
+            if (receivedCount == totalMessages) {
+                log.info("Toutes les réponses reçues");
+                return 100.0;
+            }
+            
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Interruption pendant l'attente des réponses");
+                break;
+            }
+        }
+        
+        double successRate = totalMessages > 0 ? (double) receivedCount / totalMessages * 100.0 : 0.0;
+        log.info("Délai d'attente écoulé, {} réponses reçues sur {} ({}%)", 
+            receivedCount, totalMessages, String.format("%.2f", successRate));
+            
+        return successRate;
     }
 }
