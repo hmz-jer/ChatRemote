@@ -1,130 +1,20 @@
-  package com.example.kafkamock.service;
+ Voici le compte rendu mis à jour avec l'information sur la PKI STET et les certificats QWAC :
 
-import com.example.kafkamock.model.Message;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+# Point d'avancement sur le flux outbound
 
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+• Le développement du flux outbound progresse normalement sans blocage particulier
 
-/**
- * Service pour exécuter des tests de charge sur le flux Kafka
- */
-@Service
-@Slf4j
-@RequiredArgsConstructor
-public class TestService {
+• Nous avons lancé en parallèle le développement d'une solution temporaire pour remplacer la partie back-end en attendant la finalisation des travaux de l'équipe de Cédric
 
-    private final KafkaService kafkaService;
-    
-    @Value("${test.max-threads:10}")
-    private int maxThreads;
-    
-    @Value("${test.timeout-seconds:60}")
-    private int timeoutSeconds;
-    
-    /**
-     * Exécute un test de charge en envoyant plusieurs messages simultanément
-     * 
-     * @param messageCount Nombre de messages à envoyer
-     * @param messageTemplate Modèle de message à utiliser
-     * @return Liste des messages envoyés
-     */
-    public List<Message> runLoadTest(int messageCount, String messageTemplate) {
-        log.info("Démarrage d'un test de charge avec {} messages", messageCount);
-        
-        List<Message> sentMessages = new ArrayList<>();
-        ExecutorService executor = Executors.newFixedThreadPool(
-            Math.min(messageCount, maxThreads)
-        );
-        
-        List<CompletableFuture<Message>> futures = new ArrayList<>();
-        
-        for (int i = 0; i < messageCount; i++) {
-            final int messageIndex = i;
-            CompletableFuture<Message> future = CompletableFuture.supplyAsync(() -> {
-                String content = String.format("%s - %d (%s)", 
-                    messageTemplate, 
-                    messageIndex,
-                    UUID.randomUUID());
-                    
-                return kafkaService.sendMessage(content);
-            }, executor);
-            
-            futures.add(future);
-        }
-        
-        try {
-            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-                futures.toArray(new CompletableFuture[0])
-            );
-            
-            allFutures.get(timeoutSeconds, TimeUnit.SECONDS);
-            
-            for (CompletableFuture<Message> future : futures) {
-                sentMessages.add(future.get());
-            }
-            
-            log.info("Test de charge terminé, {} messages envoyés", sentMessages.size());
-        } catch (Exception e) {
-            log.error("Erreur lors du test de charge", e);
-        } finally {
-            executor.shutdown();
-        }
-        
-        return sentMessages;
-    }
-    
-    /**
-     * Attend que tous les messages du test reçoivent une réponse
-     * 
-     * @param sentMessages Liste des messages envoyés
-     * @param timeoutSeconds Délai d'attente maximum en secondes
-     * @return Pourcentage de messages ayant reçu une réponse
-     */
-    public double waitForResponses(List<Message> sentMessages, int timeoutSeconds) {
-        log.info("Attente des réponses pour {} messages", sentMessages.size());
-        
-        LocalDateTime startTime = LocalDateTime.now();
-        int totalMessages = sentMessages.size();
-        int receivedCount = 0;
-        
-        while (Duration.between(startTime, LocalDateTime.now()).getSeconds() < timeoutSeconds) {
-            receivedCount = 0;
-            
-            for (Message message : sentMessages) {
-                if (kafkaService.getReceivedMessageById(message.getId()) != null) {
-                    receivedCount++;
-                }
-            }
-            
-            if (receivedCount == totalMessages) {
-                log.info("Toutes les réponses reçues");
-                return 100.0;
-            }
-            
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Interruption pendant l'attente des réponses");
-                break;
-            }
-        }
-        
-        double successRate = totalMessages > 0 ? (double) receivedCount / totalMessages * 100.0 : 0.0;
-        log.info("Délai d'attente écoulé, {} réponses reçues sur {} ({}%)", 
-            receivedCount, totalMessages, String.format("%.2f", successRate));
-            
-        return successRate;
-    }
-}
+• Florentino a demandé si nous pouvions développer un mock pour remplacer les banques (clients)
+
+• Nous sommes dans l'impossibilité de procéder à ce développement car nous n'avons pas encore accès à la PKI STET
+
+• La PKI STET est nécessaire pour générer des certificats QWAC (Qualified Website Authentication Certificate) conformes aux normes européennes eIDAS et PSD2 Ces certificats sont conçus pour sécuriser et authentifier les sites Web dans le contexte des services de paiement [SSLmarket](https://www.sslmarket.fr/ssl/quovadis-qualified-website-authentication-certificate-qwac)
+
+• La génération de ces certificats nécessite une validation rigoureuse par une Autorité de Certification et contient des informations spécifiques sur l'organisation
+
+• La personne responsable de nous fournir la PKI est actuellement en vacances
+
+Citations:
+- [Qualified Website Authentication Certificate (QWAC)](https://www.sslmarket.fr/ssl/quovadis-qualified-website-authentication-certificate-qwac)
