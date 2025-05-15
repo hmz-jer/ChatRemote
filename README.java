@@ -1,741 +1,651 @@
- Je vais vous aider à concevoir ce mock-client-VOP pour la validation des certificats QWAC dans le cadre d'un flux outbound. Je vais structurer ma réponse pour couvrir les différentes parties de votre demande.
+ # Guide de déploiement du mock-client-VOP sur un serveur
 
-## 1. Génération des certificats avec OpenSSL
+Je vais vous fournir une configuration complète pour déployer votre mock-client-VOP sur un serveur, avec les scripts shell nécessaires pour le démarrer, l'arrêter et gérer les certificats.
 
-### 1.1 Création d'une AC racine de test
-
-```bash
-# Création du répertoire pour stocker les clés et certificats
-mkdir -p pki/{certs,private,newcerts,crl}
-touch pki/index.txt
-echo 1000 > pki/serial
-
-# Configuration de l'AC racine
-cat > pki/openssl-ca.cnf << 'EOF'
-[ ca ]
-default_ca = CA_default
-
-[ CA_default ]
-dir = ./pki
-certs = $dir/certs
-crl_dir = $dir/crl
-database = $dir/index.txt
-new_certs_dir = $dir/newcerts
-certificate = $dir/certs/ca.cert.pem
-serial = $dir/serial
-crlnumber = $dir/crlnumber
-crl = $dir/crl/ca.crl.pem
-private_key = $dir/private/ca.key.pem
-RANDFILE = $dir/private/.rand
-name_opt = ca_default
-cert_opt = ca_default
-default_days = 3650
-default_crl_days = 30
-default_md = sha256
-preserve = no
-policy = policy_strict
-
-[ policy_strict ]
-countryName = supplied
-stateOrProvinceName = supplied
-organizationName = supplied
-organizationalUnitName = optional
-commonName = supplied
-emailAddress = optional
-
-[ req ]
-default_bits = 4096
-default_md = sha256
-distinguished_name = req_distinguished_name
-string_mask = utf8only
-x509_extensions = v3_ca
-
-[ req_distinguished_name ]
-countryName = Country Name (2 letter code)
-stateOrProvinceName = State or Province Name
-localityName = Locality Name
-organizationName = Organization Name
-organizationalUnitName = Organizational Unit Name
-commonName = Common Name
-emailAddress = Email Address
-
-[ v3_ca ]
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid:always,issuer
-basicConstraints = critical, CA:true
-keyUsage = critical, digitalSignature, cRLSign, keyCertSign
-
-[ v3_intermediate_ca ]
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid:always,issuer
-basicConstraints = critical, CA:true, pathlen:0
-keyUsage = critical, digitalSignature, cRLSign, keyCertSign
-EOF
-
-# Génération de la clé privée pour l'AC racine
-openssl genrsa -out pki/private/ca.key.pem 4096
-chmod 400 pki/private/ca.key.pem
-
-# Création du certificat de l'AC racine
-openssl req -config pki/openssl-ca.cnf -key pki/private/ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -out pki/certs/ca.cert.pem -subj "/C=FR/ST=Paris/L=Paris/O=Test Payment CA/CN=Test Root CA"
-chmod 444 pki/certs/ca.cert.pem
-
-# Vérification du certificat de l'AC racine
-openssl x509 -noout -text -in pki/certs/ca.cert.pem
-```
-
-### 1.2 Génération d'un certificat serveur pour le mock
+## 1. Structure des répertoires sur le serveur
 
 ```bash
-# Génération de la clé serveur
-openssl genrsa -out pki/private/server.key.pem 2048
-chmod 400 pki/private/server.key.pem
-
-# Création de la demande de certificat pour le serveur
-openssl req -config pki/openssl-ca.cnf -key pki/private/server.key.pem -new -sha256 -out pki/certs/server.csr.pem -subj "/C=FR/ST=Paris/L=Paris/O=Mock VOP Server/CN=mock-vop-server.example.com"
-
-# Configuration pour le certificat serveur
-cat > pki/openssl-server.cnf << 'EOF'
-[ server_cert ]
-basicConstraints = CA:FALSE
-nsCertType = server
-nsComment = "OpenSSL Generated Server Certificate"
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid,issuer:always
-keyUsage = critical, digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth
-EOF
-
-# Signature du certificat serveur par l'AC racine
-openssl ca -batch -config pki/openssl-ca.cnf -extensions server_cert -days 3650 -notext -md sha256 -in pki/certs/server.csr.pem -out pki/certs/server.cert.pem -extfile pki/openssl-server.cnf -extensions server_cert
-
-chmod 444 pki/certs/server.cert.pem
-
-# Vérification du certificat serveur
-openssl x509 -noout -text -in pki/certs/server.cert.pem
+mkdir -p /opt/mock-client-vop/{bin,config,logs,certs,lib}
 ```
 
-### 1.3 Création d'un certificat QWAC pour l'API Gateway avec extensions PSD2
-
-```bash
-# Génération de la clé pour le certificat QWAC
-openssl genrsa -out pki/private/qwac.key.pem 2048
-chmod 400 pki/private/qwac.key.pem
-
-# Configuration pour le certificat QWAC
-cat > pki/openssl-qwac.cnf << 'EOF'
-[ req ]
-distinguished_name = req_distinguished_name
-req_extensions = v3_req
-prompt = no
-
-[ req_distinguished_name ]
-C = FR
-ST = Paris
-L = Paris
-O = API Gateway Client
-CN = api-gateway.example.com
-organizationIdentifier = PSDFR-ACPR-15930
-
-[ v3_req ]
-basicConstraints = CA:FALSE
-keyUsage = critical, digitalSignature, keyEncipherment
-extendedKeyUsage = clientAuth, serverAuth
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid,issuer:always
-certificatePolicies = @policysection
-qcStatements = critical, @qcstatements
-
-[ policysection ]
-policyIdentifier = 0.4.0.19495.3.1
-userNotice.1 = @notice
-
-[ notice ]
-explicitText = "PSD2 Qualified Website Authentication Certificate"
-
-[ qcstatements ]
-id-etsi-psd2-qcStatement = DER:30:64:31:10:30:0E:06:03:2B:06:01:05:05:07:0C:01:01:01:01:01:FF:04:04:50:53:44:32:31:25:30:23:06:0A:2A:06:01:04:01:97:55:01:03:01:01:30:15:0C:09:50:53:44:46:52:2D:41:43:50:52:0C:08:31:35:39:33:30:31:29:30:27:06:08:2B:06:01:05:05:07:0C:02:30:1B:1E:19:68:74:74:70:73:3A:2F:2F:70:73:64:32:2E:65:78:61:6D:70:6C:65:2E:63:6F:6D
-EOF
-
-# Création de la demande de certificat QWAC
-openssl req -new -config pki/openssl-qwac.cnf -key pki/private/qwac.key.pem -out pki/certs/qwac.csr.pem
-
-# Configuration pour les extensions du certificat QWAC
-cat > pki/openssl-qwac-ext.cnf << 'EOF'
-[ qwac_cert ]
-basicConstraints = CA:FALSE
-keyUsage = critical, digitalSignature, keyEncipherment
-extendedKeyUsage = clientAuth, serverAuth
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid,issuer:always
-certificatePolicies = @policysection
-qcStatements = critical, @qcstatements
-
-[ policysection ]
-policyIdentifier = 0.4.0.19495.3.1
-userNotice.1 = @notice
-
-[ notice ]
-explicitText = "PSD2 Qualified Website Authentication Certificate"
-
-[ qcstatements ]
-id-etsi-psd2-qcStatement = DER:30:64:31:10:30:0E:06:03:2B:06:01:05:05:07:0C:01:01:01:01:01:FF:04:04:50:53:44:32:31:25:30:23:06:0A:2A:06:01:04:01:97:55:01:03:01:01:30:15:0C:09:50:53:44:46:52:2D:41:43:50:52:0C:08:31:35:39:33:30:31:29:30:27:06:08:2B:06:01:05:05:07:0C:02:30:1B:1E:19:68:74:74:70:73:3A:2F:2F:70:73:64:32:2E:65:78:61:6D:70:6C:65:2E:63:6F:6D
-EOF
-
-# Signature du certificat QWAC par l'AC racine
-openssl ca -batch -config pki/openssl-ca.cnf -extensions qwac_cert -days 730 -notext -md sha256 -in pki/certs/qwac.csr.pem -out pki/certs/qwac.cert.pem -extfile pki/openssl-qwac-ext.cnf -extensions qwac_cert
-
-chmod 444 pki/certs/qwac.cert.pem
-
-# Vérification du certificat QWAC
-openssl x509 -noout -text -in pki/certs/qwac.cert.pem
+Structure recommandée:
+```
+/opt/mock-client-vop/
+├── bin/            # Scripts de démarrage/arrêt
+├── config/         # Fichiers de configuration
+├── logs/           # Logs de l'application
+├── certs/          # Certificats et keystores
+│   ├── truststore/ # Certificats d'AC de confiance
+│   └── keystore/   # Certificats et clés du serveur
+└── lib/            # JAR de l'application
 ```
 
-### 1.4 Création des truststores nécessaires
+## 2. Configuration pour lire les certificats depuis un répertoire externe
 
-```bash
-# Création du truststore au format PKCS12 pour le mock-client-VOP
-openssl pkcs12 -export -in pki/certs/ca.cert.pem -out pki/truststore.p12 -nokeys -name "Root CA" -passout pass:changeit
-
-# Création du truststore au format JKS (pour application Java)
-keytool -importkeystore -srckeystore pki/truststore.p12 -srcstoretype PKCS12 -srcstorepass changeit -destkeystore pki/truststore.jks -deststoretype JKS -deststorepass changeit
-
-# Création du keystore pour le serveur mock au format PKCS12
-openssl pkcs12 -export -in pki/certs/server.cert.pem -inkey pki/private/server.key.pem -certfile pki/certs/ca.cert.pem -out pki/keystore-server.p12 -name "server" -passout pass:changeit
-
-# Conversion en JKS pour application Java
-keytool -importkeystore -srckeystore pki/keystore-server.p12 -srcstoretype PKCS12 -srcstorepass changeit -destkeystore pki/keystore-server.jks -deststoretype JKS -deststorepass changeit
-
-# Création du keystore pour l'API Gateway au format PKCS12 (pour le client QWAC)
-openssl pkcs12 -export -in pki/certs/qwac.cert.pem -inkey pki/private/qwac.key.pem -certfile pki/certs/ca.cert.pem -out pki/keystore-qwac.p12 -name "qwac" -passout pass:changeit
-
-# Conversion en JKS pour application Java
-keytool -importkeystore -srckeystore pki/keystore-qwac.p12 -srcstoretype PKCS12 -srcstorepass changeit -destkeystore pki/keystore-qwac.jks -deststoretype JKS -deststorepass changeit
-```
-
-### 1.5 Validation des certificats générés
-
-```bash
-# Validation du certificat serveur
-openssl verify -CAfile pki/certs/ca.cert.pem pki/certs/server.cert.pem
-
-# Validation du certificat QWAC
-openssl verify -CAfile pki/certs/ca.cert.pem pki/certs/qwac.cert.pem
-
-# Extraction et vérification du certificateOwnerId (PSD2 identifiant)
-openssl x509 -in pki/certs/qwac.cert.pem -noout -subject | grep "organizationIdentifier"
-```
-
-## 2. Configuration du mock-client-VOP
-
-Je vais maintenant vous fournir une configuration type pour votre application Spring Boot (application.yml).
+### Modification du fichier application.yml
 
 ```yaml
 server:
   port: 8443
   ssl:
     enabled: true
-    key-store: classpath:keystore-server.jks
-    key-store-password: changeit
+    key-store: file:/opt/mock-client-vop/certs/keystore/mock-server.jks
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
     key-store-type: JKS
     key-alias: server
-    trust-store: classpath:truststore.jks
-    trust-store-password: changeit
+    trust-store: file:/opt/mock-client-vop/certs/truststore/psd2-truststore.jks
+    trust-store-password: ${SSL_TRUSTSTORE_PASSWORD:changeit}
     trust-store-type: JKS
-    client-auth: need # Rend l'authentification mutuelle obligatoire
+    client-auth: need
 
 spring:
   application:
     name: mock-client-vop
-
-# Configuration personnalisée pour le mock-client-VOP
-mock-vop:
-  # Configuration pour la validation des certificats QWAC
-  qwac:
-    validation:
-      enabled: true
-      # Vérification de la chaîne de certificats
-      certificate-chain-validation: true
-      # Vérification de la période de validité
-      validity-period-validation: true
-      # Vérification des extensions PSD2
-      psd2-extensions-validation: true
-      # OID pour l'identifiant d'organisation PSD2
-      organization-identifier-oid: "2.5.4.97"
-  
-  # Configuration pour le routage basé sur le certificateOwnerId
-  routing:
-    enabled: true
-    # Expression régulière pour extraire l'ID du PSP à partir du certificateOwnerId
-    certificate-owner-id-pattern: "PSDFR-ACPR-(\\d+)"
-    # Mappings des PSPs (ajoutez autant de mappings que nécessaire)
-    psp-mappings:
-      "15930": "https://backend-15930.example.com"
-      "default": "https://default-backend.example.com"
+  config:
+    import: optional:file:/opt/mock-client-vop/config/application-override.yml
 
 logging:
+  file:
+    name: /opt/mock-client-vop/logs/mock-client-vop.log
   level:
     root: INFO
     com.example.mockclientvop: DEBUG
     org.springframework.web: INFO
     org.springframework.security: DEBUG
+
+# Configuration personnalisée pour le mock-client-VOP
+mock-vop:
+  qwac:
+    validation:
+      enabled: true
+      certificate-chain-validation: true
+      validity-period-validation: true
+      psd2-extensions-validation: true
+      organization-identifier-oid: "2.5.4.97"
+      certs-directory: file:/opt/mock-client-vop/certs/truststore
+  routing:
+    enabled: true
+    certificate-owner-id-pattern: "PSDFR-ACPR-(\\d+)"
+    psp-mappings:
+      "15930": "https://backend-15930.example.com"
+      "default": "https://default-backend.example.com"
 ```
 
-## 3. Implémentation du mock-client-VOP (Spring Boot)
-
-### 3.1 Structure du projet
-
-```
-src/
-├── main/
-│   ├── java/
-│   │   └── com/
-│   │       └── example/
-│   │           └── mockclientvop/
-│   │               ├── MockClientVopApplication.java
-│   │               ├── config/
-│   │               │   ├── SecurityConfig.java
-│   │               │   └── SSLConfig.java
-│   │               ├── controller/
-│   │               │   └── MockController.java
-│   │               ├── service/
-│   │               │   ├── CertificateService.java
-│   │               │   └── RoutingService.java
-│   │               └── util/
-│   │                   └── CertificateUtils.java
-│   └── resources/
-│       ├── application.yml
-│       ├── keystore-server.jks
-│       └── truststore.jks
-```
-
-### 3.2 Code source du mock-client-VOP
-
-#### MockClientVopApplication.java
-
-```java
-package com.example.mockclientvop;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class MockClientVopApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(MockClientVopApplication.class, args);
-    }
-}
-```
-
-#### SecurityConfig.java
+### Création d'une classe pour charger les certificats depuis un répertoire
 
 ```java
 package com.example.mockclientvop.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig {
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-            .authorizeRequests()
-            .anyRequest().authenticated()
-            .and()
-            .x509()
-            .subjectPrincipalRegex("CN=(.*?)(?:,|$)")
-            .and()
-            .csrf().disable();
-        return http.build();
-    }
-}
-```
-
-#### SSLConfig.java
-
-```java
-package com.example.mockclientvop.config;
-
-import org.apache.catalina.connector.Connector;
-import org.apache.tomcat.util.net.SSLHostConfig;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
-import org.springframework.boot.web.server.WebServerFactoryCustomizer;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class SSLConfig {
-
-    @Value("${server.ssl.trust-store}")
-    private String trustStore;
-
-    @Value("${server.ssl.trust-store-password}")
-    private String trustStorePassword;
-
-    @Bean
-    public WebServerFactoryCustomizer<TomcatServletWebServerFactory> sslConfigCustomizer() {
-        return factory -> factory.addConnectorCustomizers(connector -> {
-            SSLHostConfig sslHostConfig = connector.findSSlHostConfigs()[0];
-            sslHostConfig.setTruststoreFile(trustStore.replace("classpath:", ""));
-            sslHostConfig.setTruststorePassword(trustStorePassword);
-            sslHostConfig.setCertificateVerification("required");
-        });
-    }
-}
-```
-
-#### CertificateUtils.java
-
-```java
-package com.example.mockclientvop.util;
-
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.x500.RDN;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x500.style.BCStyle;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
-import org.springframework.stereotype.Component;
-
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.X509Certificate;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-@Component
-public class CertificateUtils {
-
-    private static final ASN1ObjectIdentifier ORGANIZATION_IDENTIFIER = new ASN1ObjectIdentifier("2.5.4.97");
-    
-    public Optional<String> extractOrganizationIdFromCertificate(X509Certificate certificate) {
-        try {
-            X500Name x500name = new JcaX509CertificateHolder(certificate).getSubject();
-            RDN[] rdns = x500name.getRDNs(ORGANIZATION_IDENTIFIER);
-            
-            if (rdns.length > 0) {
-                return Optional.of(rdns[0].getFirst().getValue().toString());
-            }
-            
-            return Optional.empty();
-        } catch (CertificateEncodingException e) {
-            return Optional.empty();
-        }
-    }
-    
-    public Optional<String> extractPSPIdFromOrganizationId(String organizationId, String pattern) {
-        Pattern regex = Pattern.compile(pattern);
-        Matcher matcher = regex.matcher(organizationId);
-        
-        if (matcher.find() && matcher.groupCount() >= 1) {
-            return Optional.of(matcher.group(1));
-        }
-        
-        return Optional.empty();
-    }
-    
-    public boolean validateQWACCertificate(X509Certificate certificate) {
-        // Validation de base (période de validité)
-        try {
-            certificate.checkValidity();
-            
-            // Vérification des extensions PSD2 (à personnaliser selon vos besoins)
-            // Cette implémentation est simplifiée
-            
-            // 1. Vérifier la présence de l'identifiant d'organisation
-            Optional<String> orgId = extractOrganizationIdFromCertificate(certificate);
-            if (orgId.isEmpty()) {
-                return false;
-            }
-            
-            // 2. Vérifier le format de l'identifiant d'organisation (PSDFR-ACPR-XXXXX)
-            String pattern = "PSDFR-ACPR-(\\d+)";
-            Optional<String> pspId = extractPSPIdFromOrganizationId(orgId.get(), pattern);
-            return pspId.isPresent();
-            
-        } catch (Exception e) {
-            return false;
-        }
-    }
-}
-```
-
-#### CertificateService.java
-
-```java
-package com.example.mockclientvop.service;
-
-import com.example.mockclientvop.util.CertificateUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import java.security.cert.X509Certificate;
-import java.util.Optional;
-
-@Service
-public class CertificateService {
-
-    private static final Logger logger = LoggerFactory.getLogger(CertificateService.class);
-    
-    @Autowired
-    private CertificateUtils certificateUtils;
-    
-    @Value("${mock-vop.qwac.validation.enabled}")
-    private boolean validationEnabled;
-    
-    @Value("${mock-vop.qwac.validation.certificate-chain-validation}")
-    private boolean certificateChainValidation;
-    
-    @Value("${mock-vop.qwac.validation.validity-period-validation}")
-    private boolean validityPeriodValidation;
-    
-    @Value("${mock-vop.qwac.validation.psd2-extensions-validation}")
-    private boolean psd2ExtensionsValidation;
-    
-    @Value("${mock-vop.routing.certificate-owner-id-pattern}")
-    private String certificateOwnerIdPattern;
-
-    public boolean validateQWACCertificate(X509Certificate certificate) {
-        if (!validationEnabled) {
-            return true;
-        }
-        
-        logger.debug("Validating QWAC Certificate: {}", certificate.getSubjectX500Principal());
-        
-        if (validityPeriodValidation) {
-            try {
-                certificate.checkValidity();
-            } catch (Exception e) {
-                logger.error("Certificate validity check failed", e);
-                return false;
-            }
-        }
-        
-        if (psd2ExtensionsValidation) {
-            boolean isValid = certificateUtils.validateQWACCertificate(certificate);
-            if (!isValid) {
-                logger.error("PSD2 extensions validation failed");
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    
-    public Optional<String> extractPSPIdFromCertificate(X509Certificate certificate) {
-        Optional<String> organizationId = certificateUtils.extractOrganizationIdFromCertificate(certificate);
-        if (organizationId.isPresent()) {
-            logger.debug("Extracted organization identifier: {}", organizationId.get());
-            return certificateUtils.extractPSPIdFromOrganizationId(organizationId.get(), certificateOwnerIdPattern);
-        }
-        return Optional.empty();
-    }
-}
-```
-
-#### RoutingService.java
-
-```java
-package com.example.mockclientvop.service;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import java.security.cert.X509Certificate;
-import java.util.Map;
-import java.util.Optional;
-
-@Service
-public class RoutingService {
-
-    private static final Logger logger = LoggerFactory.getLogger(RoutingService.class);
-    
-    @Autowired
-    private CertificateService certificateService;
-    
-    @Value("${mock-vop.routing.enabled}")
-    private boolean routingEnabled;
-    
-    @Value("#{${mock-vop.routing.psp-mappings}}")
-    private Map<String, String> pspMappings;
-    
-    public String determineTargetUrl(X509Certificate certificate) {
-        if (!routingEnabled) {
-            return pspMappings.getOrDefault("default", "https://default-backend.example.com");
-        }
-        
-        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(certificate);
-        if (pspId.isPresent()) {
-            String targetUrl = pspMappings.getOrDefault(pspId.get(), pspMappings.get("default"));
-            logger.debug("Routing request for PSP ID {} to {}", pspId.get(), targetUrl);
-            return targetUrl;
-        }
-        
-        logger.warn("Could not determine PSP ID from certificate, using default route");
-        return pspMappings.getOrDefault("default", "https://default-backend.example.com");
-    }
-}
-```
-
-#### MockController.java
-
-```java
-package com.example.mockclientvop.controller;
-
-import com.example.mockclientvop.service.CertificateService;
-import com.example.mockclientvop.service.RoutingService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import javax.servlet.http.HttpServletRequest;
-import java.security.cert.X509Certificate;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-
-@RestController
-@RequestMapping("/api")
-public class MockController {
-
-    private static final Logger logger = LoggerFactory.getLogger(MockController.class);
-    
-    @Autowired
-    private CertificateService certificateService;
-    
-    @Autowired
-    private RoutingService routingService;
-
-    @GetMapping("/status")
-    public ResponseEntity<Map<String, Object>> getStatus(HttpServletRequest request) {
-        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
-        
-        Map<String, Object> response = new HashMap<>();
-        
-        if (certs == null || certs.length == 0) {
-            logger.error("No client certificate provided");
-            response.put("status", "error");
-            response.put("message", "No client certificate provided");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-        }
-        
-        X509Certificate clientCert = certs[0];
-        
-        // Validation du certificat QWAC
-        boolean isValid = certificateService.validateQWACCertificate(clientCert);
-        if (!isValid) {
-            logger.error("Invalid QWAC certificate");
-            response.put("status", "error");
-            response.put("message", "Invalid QWAC certificate");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-        }
-        
-        // Extraction du PSP ID
-        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(clientCert);
-        
-        // Construction de la réponse
-        response.put("status", "success");
-        response.put("message", "Valid QWAC certificate");
-        response.put("subject", clientCert.getSubjectX500Principal().toString());
-        
-        if (pspId.isPresent()) {
-            response.put("pspId", pspId.get());
-            response.put("targetUrl", routingService.determineTargetUrl(clientCert));
-        }
-        
-        return ResponseEntity.ok(response);
-    }
-    
-    @RequestMapping("/**")
-    public ResponseEntity<Map<String, Object>> handleRequest(HttpServletRequest request) {
-        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
-        
-        Map<String, Object> response = new HashMap<>();
-        
-        if (certs == null || certs.length == 0) {
-            logger.error("No client certificate provided");
-            response.put("status", "error");
-            response.put("message", "No client certificate provided");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-        }
-        
-        X509Certificate clientCert = certs[0];
-        
-        // Validation du certificat QWAC
-        boolean isValid = certificateService.validateQWACCertificate(clientCert);
-        if (!isValid) {
-            logger.error("Invalid QWAC certificate");
-            response.put("status", "error");
-            response.put("message", "Invalid QWAC certificate");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-        }
-        
-        // Construction de la réponse pour simuler un forward
-        String targetUrl = routingService.determineTargetUrl(clientCert);
-        
-        response.put("status", "success");
-        response.put("message", "Request would be forwarded");
-        response.put("originalPath", request.getRequestURI());
-        response.put("method", request.getMethod());
-        response.put("targetUrl", targetUrl);
-        
-        logger.info("Simulating forwarding {} request to {}", request.getMethod(), targetUrl);
-        
-        return ResponseEntity.ok(response);
-    }
-}
-```
-
-## 4. Test du mock-client-VOP
-
-### 4.1 Préparer l'environnement de test
-
-1. Placez les fichiers JKS générés dans le répertoire `src/main/resources`
-2. Exécutez l'application Spring Boot
-
-### 4.2 Tester avec curl
-
-```bash
-# Test avec curl en utilisant le certificat QWAC
-curl --cert-type P12 --cert pki/keystore-qwac.p12:changeit \
-     --cacert pki/certs/ca.cert.pem \
-     -v https://localhost:8443/api/status
-```
-
-### 4.3 Tester avec un client Java
-
-Voici un exemple simple de client Java pour tester la connexion:
-
-```java
-import javax.net.ssl.*;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.List;
 
-public class QwacTestClient {
+@Configuration
+public class CertificateLoaderConfig {
+
+    private static final Logger logger = LoggerFactory.getLogger(CertificateLoaderConfig.class);
+
+    @Value("${mock-vop.qwac.validation.certs-directory:file:/opt/mock-client-vop/certs/truststore}")
+    private String certsDirectory;
+
+    @Bean
+    public List<X509Certificate> trustedCertificates() {
+        List<X509Certificate> certificates = new ArrayList<>();
+        
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources(certsDirectory + "/*.{cer,crt,pem}");
+            
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            
+            for (Resource resource : resources) {
+                try (FileInputStream fis = new FileInputStream(resource.getFile())) {
+                    X509Certificate cert = (X509Certificate) cf.generateCertificate(fis);
+                    certificates.add(cert);
+                    logger.info("Loaded trusted certificate: {}", cert.getSubjectX500Principal().getName());
+                } catch (Exception e) {
+                    logger.error("Failed to load certificate from {}: {}", resource.getFilename(), e.getMessage());
+                }
+            }
+            
+            logger.info("Loaded {} trusted certificates", certificates.size());
+        } catch (IOException | CertificateException e) {
+            logger.error("Error loading trusted certificates", e);
+        }
+        
+        return certificates;
+    }
     
-    public static void main(String[] args) throws Exception {
-        // Chemin vers les keystores et truststores
-        String keystorePath = "pki/keystore-qwac.jks";
-        String keystorePassword = "changeit";
-        String truststorePath
+    @Bean
+    public KeyStore trustStore() {
+        try {
+            KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            trustStore.load(null); // Initialize an empty KeyStore
+            
+            List<X509Certificate> certs = trustedCertificates();
+            for (int i = 0; i < certs.size(); i++) {
+                X509Certificate cert = certs.get(i);
+                String alias = "trusted-cert-" + i;
+                trustStore.setCertificateEntry(alias, cert);
+            }
+            
+            return trustStore;
+        } catch (Exception e) {
+            logger.error("Error creating trustStore", e);
+            throw new RuntimeException("Failed to create trustStore", e);
+        }
+    }
+}
+```
+
+## 3. Scripts shell pour démarrer/arrêter l'application
+
+### Script de démarrage (start.sh)
+
+```bash
+#!/bin/bash
+
+# start.sh - Script pour démarrer le mock-client-VOP
+
+# Déterminer le répertoire d'installation
+INSTALL_DIR="/opt/mock-client-vop"
+JAVA_OPTS="-Xms256m -Xmx512m"
+
+# Vérifier que le répertoire existe
+if [ ! -d "$INSTALL_DIR" ]; then
+  echo "Répertoire d'installation $INSTALL_DIR introuvable"
+  exit 1
+fi
+
+# Charger les variables d'environnement personnalisées
+if [ -f "$INSTALL_DIR/config/env.sh" ]; then
+  source "$INSTALL_DIR/config/env.sh"
+fi
+
+# Vérifier que le JAR existe
+JAR_FILE=$(ls -t $INSTALL_DIR/lib/mock-client-vop-*.jar 2>/dev/null | head -1)
+if [ -z "$JAR_FILE" ]; then
+  echo "Fichier JAR de l'application introuvable dans $INSTALL_DIR/lib/"
+  exit 1
+fi
+
+# Vérifier si l'application est déjà en cours d'exécution
+PID_FILE="$INSTALL_DIR/mock-client-vop.pid"
+if [ -f "$PID_FILE" ]; then
+  PID=$(cat "$PID_FILE")
+  if ps -p $PID > /dev/null; then
+    echo "L'application est déjà en cours d'exécution avec le PID $PID"
+    exit 0
+  else
+    echo "Ancien fichier PID trouvé, mais l'application n'est pas en cours d'exécution. Suppression du fichier PID."
+    rm "$PID_FILE"
+  fi
+fi
+
+# Créer le répertoire de logs s'il n'existe pas
+mkdir -p "$INSTALL_DIR/logs"
+
+# Démarrer l'application
+echo "Démarrage de mock-client-VOP..."
+nohup java $JAVA_OPTS \
+  -Dspring.config.additional-location=file:$INSTALL_DIR/config/ \
+  -Dlogging.file.name=$INSTALL_DIR/logs/mock-client-vop.log \
+  -jar "$JAR_FILE" > "$INSTALL_DIR/logs/startup.log" 2>&1 &
+
+# Sauvegarder le PID
+echo $! > "$PID_FILE"
+echo "Application démarrée avec le PID $(cat $PID_FILE)"
+
+# Vérifier que l'application a bien démarré
+sleep 5
+if ps -p $(cat "$PID_FILE") > /dev/null; then
+  echo "L'application a démarré avec succès"
+  echo "Les logs sont disponibles dans $INSTALL_DIR/logs/mock-client-vop.log"
+  exit 0
+else
+  echo "L'application n'a pas démarré correctement. Consultez les logs pour plus d'informations."
+  echo "Contenu du fichier startup.log:"
+  cat "$INSTALL_DIR/logs/startup.log"
+  exit 1
+fi
+```
+
+### Script d'arrêt (stop.sh)
+
+```bash
+#!/bin/bash
+
+# stop.sh - Script pour arrêter le mock-client-VOP
+
+# Déterminer le répertoire d'installation
+INSTALL_DIR="/opt/mock-client-vop"
+PID_FILE="$INSTALL_DIR/mock-client-vop.pid"
+
+# Vérifier si le fichier PID existe
+if [ ! -f "$PID_FILE" ]; then
+  echo "Fichier PID introuvable. L'application ne semble pas être en cours d'exécution."
+  exit 0
+fi
+
+# Lire le PID
+PID=$(cat "$PID_FILE")
+
+# Vérifier si le processus existe
+if ! ps -p $PID > /dev/null; then
+  echo "Processus avec PID $PID introuvable. L'application ne semble pas être en cours d'exécution."
+  rm "$PID_FILE"
+  exit 0
+fi
+
+# Arrêt gracieux
+echo "Arrêt gracieux de l'application avec le PID $PID..."
+kill $PID
+
+# Attendre que le processus se termine (max 30 secondes)
+TIMEOUT=30
+for i in $(seq 1 $TIMEOUT); do
+  if ! ps -p $PID > /dev/null; then
+    break
+  fi
+  echo "En attente de l'arrêt de l'application... ($i/$TIMEOUT)"
+  sleep 1
+done
+
+# Vérifier si le processus s'est arrêté
+if ps -p $PID > /dev/null; then
+  echo "L'application ne s'est pas arrêtée après $TIMEOUT secondes. Force l'arrêt."
+  kill -9 $PID
+  sleep 1
+fi
+
+# Supprimer le fichier PID
+rm "$PID_FILE"
+echo "L'application a été arrêtée."
+```
+
+### Script de statut (status.sh)
+
+```bash
+#!/bin/bash
+
+# status.sh - Script pour vérifier le statut du mock-client-VOP
+
+# Déterminer le répertoire d'installation
+INSTALL_DIR="/opt/mock-client-vop"
+PID_FILE="$INSTALL_DIR/mock-client-vop.pid"
+
+# Vérifier si le fichier PID existe
+if [ ! -f "$PID_FILE" ]; then
+  echo "Statut: ARRÊTÉ (Fichier PID introuvable)"
+  exit 1
+fi
+
+# Lire le PID
+PID=$(cat "$PID_FILE")
+
+# Vérifier si le processus existe
+if ps -p $PID > /dev/null; then
+  echo "Statut: EN COURS D'EXÉCUTION (PID: $PID)"
+  
+  # Afficher quelques informations supplémentaires
+  UPTIME=$(ps -o etime= -p $PID)
+  MEM=$(ps -o rss= -p $PID)
+  MEM_MB=$(echo "scale=2; $MEM/1024" | bc)
+  
+  echo "Temps d'exécution: $UPTIME"
+  echo "Mémoire utilisée: $MEM_MB MB"
+  
+  # Vérifier si le serveur répond
+  if command -v curl &> /dev/null; then
+    echo "Test de connexion au serveur..."
+    curl -k -s -o /dev/null -w "Code de statut HTTP: %{http_code}\n" https://localhost:8443/api/status || echo "Impossible de se connecter au serveur"
+  fi
+  
+  exit 0
+else
+  echo "Statut: DÉFAILLANT (PID $PID n'existe pas, mais le fichier PID existe)"
+  rm "$PID_FILE"
+  exit 1
+fi
+```
+
+### Script de gestion des certificats (cert-manager.sh)
+
+```bash
+#!/bin/bash
+
+# cert-manager.sh - Script pour gérer les certificats du mock-client-VOP
+
+INSTALL_DIR="/opt/mock-client-vop"
+CERTS_DIR="$INSTALL_DIR/certs"
+TRUSTSTORE_DIR="$CERTS_DIR/truststore"
+KEYSTORE_DIR="$CERTS_DIR/keystore"
+TRUSTSTORE_FILE="$TRUSTSTORE_DIR/psd2-truststore.jks"
+TRUSTSTORE_PASSWORD="changeit"
+TEMP_DIR="/tmp/cert-manager-$$"
+
+# Fonction d'aide
+usage() {
+  echo "Usage: $0 [OPTION]"
+  echo "Gestion des certificats pour mock-client-VOP"
+  echo ""
+  echo "Options:"
+  echo "  list                    Liste tous les certificats dans le truststore"
+  echo "  import-ca FILE ALIAS    Importe un certificat d'AC dans le truststore"
+  echo "  delete-ca ALIAS         Supprime un certificat d'AC du truststore"
+  echo "  import-server-cert FILE Importe un certificat serveur dans le keystore"
+  echo "  validate-cert FILE      Valide un certificat QWAC avec le truststore"
+  echo "  create-keystore FILE    Crée un nouveau keystore serveur à partir d'un PKCS12"
+  echo ""
+  exit 1
+}
+
+# Vérification des répertoires
+mkdir -p "$TRUSTSTORE_DIR" "$KEYSTORE_DIR"
+
+# Traiter les arguments
+if [ $# -lt 1 ]; then
+  usage
+fi
+
+# Fonction pour lister les certificats
+list_certs() {
+  echo "Certificats dans le truststore:"
+  if [ -f "$TRUSTSTORE_FILE" ]; then
+    keytool -list -v -keystore "$TRUSTSTORE_FILE" -storepass "$TRUSTSTORE_PASSWORD"
+  else
+    echo "Le fichier truststore n'existe pas: $TRUSTSTORE_FILE"
+    exit 1
+  fi
+}
+
+# Fonction pour importer un certificat d'AC
+import_ca() {
+  if [ $# -ne 2 ]; then
+    echo "Erreur: Spécifiez le fichier de certificat et l'alias"
+    usage
+  fi
+  
+  CERT_FILE="$1"
+  ALIAS="$2"
+  
+  if [ ! -f "$CERT_FILE" ]; then
+    echo "Erreur: Le fichier de certificat n'existe pas: $CERT_FILE"
+    exit 1
+  fi
+  
+  # Créer le truststore s'il n'existe pas
+  if [ ! -f "$TRUSTSTORE_FILE" ]; then
+    echo "Création d'un nouveau truststore..."
+    keytool -genkeypair -alias dummy -keystore "$TRUSTSTORE_FILE" -storepass "$TRUSTSTORE_PASSWORD" \
+            -keypass "$TRUSTSTORE_PASSWORD" -dname "CN=dummy" -keyalg RSA
+    keytool -delete -alias dummy -keystore "$TRUSTSTORE_FILE" -storepass "$TRUSTSTORE_PASSWORD"
+  fi
+  
+  # Importer le certificat
+  echo "Importation du certificat $CERT_FILE avec l'alias $ALIAS..."
+  keytool -importcert -file "$CERT_FILE" -alias "$ALIAS" -keystore "$TRUSTSTORE_FILE" \
+          -storepass "$TRUSTSTORE_PASSWORD" -noprompt
+  
+  # Copier également le fichier dans le répertoire des certificats
+  cp "$CERT_FILE" "$TRUSTSTORE_DIR/"
+  
+  echo "Certificat importé avec succès"
+}
+
+# Fonction pour supprimer un certificat d'AC
+delete_ca() {
+  if [ $# -ne 1 ]; then
+    echo "Erreur: Spécifiez l'alias du certificat à supprimer"
+    usage
+  fi
+  
+  ALIAS="$1"
+  
+  if [ ! -f "$TRUSTSTORE_FILE" ]; then
+    echo "Erreur: Le fichier truststore n'existe pas: $TRUSTSTORE_FILE"
+    exit 1
+  fi
+  
+  # Supprimer le certificat
+  echo "Suppression du certificat avec l'alias $ALIAS..."
+  keytool -delete -alias "$ALIAS" -keystore "$TRUSTSTORE_FILE" -storepass "$TRUSTSTORE_PASSWORD"
+  
+  echo "Certificat supprimé avec succès"
+}
+
+# Fonction pour importer un certificat serveur
+import_server_cert() {
+  if [ $# -ne 1 ]; then
+    echo "Erreur: Spécifiez le fichier PKCS12 du certificat serveur"
+    usage
+  fi
+  
+  PKCS12_FILE="$1"
+  
+  if [ ! -f "$PKCS12_FILE" ]; then
+    echo "Erreur: Le fichier PKCS12 n'existe pas: $PKCS12_FILE"
+    exit 1
+  fi
+  
+  # Demander le mot de passe du PKCS12
+  read -sp "Entrez le mot de passe du fichier PKCS12: " PKCS12_PASSWORD
+  echo ""
+  
+  # Demander le mot de passe du keystore
+  read -sp "Entrez le mot de passe pour le nouveau keystore serveur: " KEYSTORE_PASSWORD
+  echo ""
+  
+  # Nom du fichier keystore
+  KEYSTORE_FILE="$KEYSTORE_DIR/mock-server.jks"
+  
+  # Convertir le PKCS12 en JKS
+  echo "Conversion du PKCS12 en JKS..."
+  keytool -importkeystore -srckeystore "$PKCS12_FILE" -srcstoretype PKCS12 -srcstorepass "$PKCS12_PASSWORD" \
+          -destkeystore "$KEYSTORE_FILE" -deststoretype JKS -deststorepass "$KEYSTORE_PASSWORD"
+  
+  echo "Certificat serveur importé avec succès dans $KEYSTORE_FILE"
+  
+  # Mettre à jour le fichier de configuration avec le nouveau mot de passe
+  ENV_FILE="$INSTALL_DIR/config/env.sh"
+  touch "$ENV_FILE"
+  
+  # Remplacer ou ajouter la ligne SSL_KEYSTORE_PASSWORD
+  if grep -q "SSL_KEYSTORE_PASSWORD" "$ENV_FILE"; then
+    sed -i "s/export SSL_KEYSTORE_PASSWORD=.*/export SSL_KEYSTORE_PASSWORD=\"$KEYSTORE_PASSWORD\"/" "$ENV_FILE"
+  else
+    echo "export SSL_KEYSTORE_PASSWORD=\"$KEYSTORE_PASSWORD\"" >> "$ENV_FILE"
+  fi
+  
+  echo "Mot de passe du keystore mis à jour dans $ENV_FILE"
+}
+
+# Fonction pour valider un certificat QWAC
+validate_cert() {
+  if [ $# -ne 1 ]; then
+    echo "Erreur: Spécifiez le fichier de certificat QWAC à valider"
+    usage
+  fi
+  
+  QWAC_FILE="$1"
+  
+  if [ ! -f "$QWAC_FILE" ]; then
+    echo "Erreur: Le fichier de certificat n'existe pas: $QWAC_FILE"
+    exit 1
+  fi
+  
+  if [ ! -f "$TRUSTSTORE_FILE" ]; then
+    echo "Erreur: Le fichier truststore n'existe pas: $TRUSTSTORE_FILE"
+    exit 1
+  fi
+  
+  # Extraire les certificats individuels du truststore
+  mkdir -p "$TEMP_DIR"
+  
+  # Lister les alias dans le truststore
+  aliases=$(keytool -list -keystore "$TRUSTSTORE_FILE" -storepass "$TRUSTSTORE_PASSWORD" | grep "trustedCertEntry" | awk '{print $1}')
+  
+  # Exporter chaque certificat
+  for alias in $aliases; do
+    keytool -exportcert -alias "$alias" -keystore "$TRUSTSTORE_FILE" -storepass "$TRUSTSTORE_PASSWORD" -rfc -file "$TEMP_DIR/$alias.pem"
+  done
+  
+  # Créer un fichier CAfile contenant tous les certificats d'AC
+  cat "$TEMP_DIR"/*.pem > "$TEMP_DIR/all_ca.pem"
+  
+  # Valider le certificat QWAC
+  echo "Validation du certificat QWAC..."
+  openssl verify -CAfile "$TEMP_DIR/all_ca.pem" "$QWAC_FILE"
+  
+  # Afficher les informations du certificat
+  echo ""
+  echo "Informations sur le certificat QWAC:"
+  openssl x509 -in "$QWAC_FILE" -text -noout | grep -E "Subject:|Issuer:|Validity|PSD2|2.5.4.97"
+  
+  # Nettoyer
+  rm -rf "$TEMP_DIR"
+}
+
+# Fonction pour créer un nouveau keystore
+create_keystore() {
+  if [ $# -ne 1 ]; then
+    echo "Erreur: Spécifiez le fichier PKCS12 contenant la clé et le certificat"
+    usage
+  fi
+  
+  PKCS12_FILE="$1"
+  
+  if [ ! -f "$PKCS12_FILE" ]; then
+    echo "Erreur: Le fichier PKCS12 n'existe pas: $PKCS12_FILE"
+    exit 1
+  fi
+  
+  # Demander les mots de passe
+  read -sp "Entrez le mot de passe du fichier PKCS12: " PKCS12_PASSWORD
+  echo ""
+  read -sp "Entrez le mot de passe pour le nouveau keystore: " NEW_KEYSTORE_PASSWORD
+  echo ""
+  
+  # Nom du nouveau keystore
+  KEYSTORE_FILE="$KEYSTORE_DIR/mock-server.jks"
+  
+  # Créer le keystore
+  echo "Création d'un nouveau keystore..."
+  keytool -importkeystore -srckeystore "$PKCS12_FILE" -srcstoretype PKCS12 -srcstorepass "$PKCS12_PASSWORD" \
+          -destkeystore "$KEYSTORE_FILE" -deststoretype JKS -deststorepass "$NEW_KEYSTORE_PASSWORD"
+  
+  # Mettre à jour le fichier de configuration
+  ENV_FILE="$INSTALL_DIR/config/env.sh"
+  touch "$ENV_FILE"
+  
+  # Remplacer ou ajouter la ligne SSL_KEYSTORE_PASSWORD
+  if grep -q "SSL_KEYSTORE_PASSWORD" "$ENV_FILE"; then
+    sed -i "s/export SSL_KEYSTORE_PASSWORD=.*/export SSL_KEYSTORE_PASSWORD=\"$NEW_KEYSTORE_PASSWORD\"/" "$ENV_FILE"
+  else
+    echo "export SSL_KEYSTORE_PASSWORD=\"$NEW_KEYSTORE_PASSWORD\"" >> "$ENV_FILE"
+  fi
+  
+  echo "Nouveau keystore créé: $KEYSTORE_FILE"
+  echo "Mot de passe du keystore mis à jour dans $ENV_FILE"
+}
+
+# Exécuter la commande demandée
+case "$1" in
+  "list")
+    list_certs
+    ;;
+  "import-ca")
+    import_ca "$2" "$3"
+    ;;
+  "delete-ca")
+    delete_ca "$2"
+    ;;
+  "import-server-cert")
+    import_server_cert "$2"
+    ;;
+  "validate-cert")
+    validate_cert "$2"
+    ;;
+  "create-keystore")
+    create_keystore "$2"
+    ;;
+  *)
+    echo "Option non reconnue: $1"
+    usage
+    ;;
+esac
+
+exit 0
+```
+
+## 4. Script d'installation complet
+
+```bash
+#!/bin/bash
+
+# install.sh - Script d'installation du mock-client-VOP
+
+set -e
+
+# Répertoire d'installation
+INSTALL_DIR="/opt/mock-client-vop"
+CURRENT_DIR=$(pwd)
+JAR_FILE="mock-client-vop.jar"
+
+# Vérifier les dépendances
+for cmd in java keytool openssl; do
+  if ! command -v $cmd &> /dev/null; then
+    echo "Erreur: $cmd n'est pas installé"
+    exit 1
+  fi
+done
+
+# Vérifier que le JAR existe
+if [ ! -f "$JAR_FILE" ]; then
+  echo "Erreur: $JAR_FILE n'a pas été trouvé dans le répertoire courant"
+  exit 1
+fi
+
+# Créer les répertoires
+echo "Création des répertoires d'installation..."
+mkdir -p "$INSTALL_DIR"/{bin,config,logs,certs/{truststore,keystore},lib}
+
+# Copier le JAR
+echo "Copie du fichier JAR de l'application..."
+cp "$JAR_FILE" "$INSTALL_DIR/lib/"
+
+# Copier les scripts
+echo "Création des scripts de gestion..."
+cat > "$INSTALL_DIR/bin/start.sh" << 'EOF'
+#!/bin/bash
+# start.sh - Script pour démarrer le mock-client-VOP
+# [Contenu du script start.sh]
+EOF
+
+cat > "$INSTALL_DIR/bin/stop.sh" << 'EOF'
+#!/bin/bash
+# stop.sh - Script pour arrêter le mock-client-VOP
+# [Contenu du script stop.sh]
+EOF
+
+cat > "$INSTALL_DIR/bin/status.sh" << 'EOF'
+#!/bin/bash
+# status.sh - Script pour vérifier le statut du mock-client-VOP
+# [Contenu du script status.sh]
+EOF
+
+cat > "$INSTALL_DIR/bin/cert-manager.sh" << 'EOF'
+#!/bin/bash
