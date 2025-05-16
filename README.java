@@ -1,37 +1,32 @@
- **Objet: RE: Ajout du ResponseTopic dans le header Kafka**
+ # Mail à envoyer à Ivan
 
-Bonjour,
+Objet : Validation des étapes de création des certificats QWAC et tests du mock-client
 
-Merci pour cette précision concernant l'ajout du ResponseTopic dans le header Kafka.
+Bonjour Ivan,
 
-Je confirme que nous n'avions pas reçu cette information dans les spécifications initiales. Cependant, nous allons procéder à l'ajout de l'attribut "responseTopic" dans les headers Kafka comme vous l'indiquez, pour les flux inbound et outbound.
+Suite à nos travaux sur la mise en place du flux outbound avec validation de certificats QWAC, je souhaitais vérifier avec toi si notre approche est conforme aux exigences.
 
-À noter toutefois un point important concernant le flux outbound: les topics sur lesquels nous allons répondre doivent être déjà configurés dès le début dans le Proxy Java. Cette configuration préalable est nécessaire pour assurer le bon fonctionnement du système.
+Nous avons élaboré les étapes suivantes pour la création et la validation des certificats QWAC :
 
-Nous allons planifier cette modification et l'intégrer dans notre prochaine livraison. Si tu as des précisions supplémentaires concernant ce besoin, n'hésite pas à nous les communiquer.
+1. **Création d'une AC racine de test** utilisant OpenSSL pour simuler l'infrastructure PKI
+2. **Génération des certificats QWAC** incluant les extensions spécifiques PSD2, notamment :
+   - L'identifiant d'organisation au format PSDFR-ACPR-XXXXX dans le champ 2.5.4.97
+   - Les extensions nécessaires (KeyUsage, ExtendedKeyUsage, QCStatements)
+3. **Mise en place d'un mock-client-VOP** capable de :
+   - Valider les connexions MTLS
+   - Extraire et vérifier le certificateOwnerId
+   - Router les requêtes en fonction de l'identifiant PSP
 
-Cordialement,
-[Ton nom]
+Nous avons effectué plusieurs tests avec notre mock pour valider le bon fonctionnement du processus :
+- Validation de chaînes de certificats complètes
+- Vérification de l'extraction correcte de l'identifiant PSP
+- Tests de connexion avec différents certificats
 
- **Objet: RE: Ajout du ResponseTopic dans le header Kafka**
+Pourrais-tu nous confirmer si cette approche est en ligne avec tes attentes ? Y a-t-il des points spécifiques concernant la structure des certificats ou le processus de validation que nous devrions ajuster ?
 
-Bonjour,
+Je reste disponible pour échanger sur le sujet ou pour te présenter les détails techniques de notre implémentation si nécessaire.
 
-Suite à votre demande concernant l'ajout du ResponseTopic dans le header Kafka, voici notre réponse:
-
-• Nous n'avions pas reçu cette information dans les spécifications initiales.
-
-• Nous allons implémenter l'ajout de l'attribut "responseTopic" dans les headers Kafka comme demandé.
-
-• Cette modification concernera:
-  - Le flux inbound
-  - Le flux outbound
-
-• Point d'attention important: pour le flux outbound, les topics de réponse doivent impérativement être configurés à l'avance dans le Proxy Java.
-
-• Nous intégrerons cette modification dans notre prochaine livraison.
-
-N'hésite pas à revenir vers nous si tu as des précisions supplémentaires à apporter.
+Merci d'avance pour ton retour,
 
 Cordialement,
-[Ton nom]
+[Votre nom]
