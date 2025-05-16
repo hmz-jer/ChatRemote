@@ -1,79 +1,34 @@
- # Configuration pour utiliser application.yml dans le dossier conf
+ L'erreur "in position 10 of 12 in FilterChainProxy" indique un problème dans la chaîne de filtres de sécurité Spring Security lors de votre test avec curl. Cette erreur se produit souvent lors de l'authentification client mutuelle (mTLS). Voici comment résoudre ce problème étape par étape:
 
-Pour configurer votre mock-client-VOP afin qu'il utilise un fichier `application.yml` situé dans le dossier `/opt/mock-client-vop/conf/`, voici les modifications nécessaires:
+## 1. Analyse de l'erreur
 
-## 1. Modification du script de démarrage
+Cette erreur peut avoir plusieurs causes:
 
-Modifiez le script `mock-vop.sh` pour qu'il utilise le fichier de configuration externe:
+1. **Certificat client non fourni**: Vous n'avez pas fourni de certificat client avec votre requête curl
+2. **Certificat client invalide**: Le certificat client est fourni mais n'est pas valide/n'est pas approuvé
+3. **Problème dans la configuration du truststore**: Le truststore du serveur ne contient pas l'AC qui a signé le certificat client
+4. **Problème de format ou de chemin des certificats**: Les chemins vers les certificats dans la commande curl sont incorrects
+5. **Problème de configuration SSL côté serveur**: La configuration SSL du serveur est incorrecte
+
+## 2. Vérifier les logs du serveur
+
+Vérifiez les logs détaillés du serveur pour identifier la cause exacte:
 
 ```bash
-#!/bin/bash
-
-# mock-vop.sh - Script de gestion pour le mock-client-VOP
-# Usage: mock-vop.sh {start|stop|status|restart|cert-import|cert-list|cert-validate}
-
-# Déterminer le répertoire d'installation
-INSTALL_DIR="/opt/mock-client-vop"
-CONF_DIR="$INSTALL_DIR/conf"
-JAVA_OPTS="-Xms256m -Xmx512m"
-PID_FILE="$INSTALL_DIR/mock-client-vop.pid"
-JAR_FILE=$(ls -t $INSTALL_DIR/lib/mock-client-vop-*.jar 2>/dev/null | head -1)
-LOG_FILE="$INSTALL_DIR/logs/mock-client-vop.log"
-CERTS_DIR="$INSTALL_DIR/certs"
-TRUSTSTORE_DIR="$CERTS_DIR/truststore"
-KEYSTORE_DIR="$CERTS_DIR/keystore"
-TRUSTSTORE_FILE="$TRUSTSTORE_DIR/truststore.jks"
-KEYSTORE_FILE="$KEYSTORE_DIR/server.jks"
-TRUSTSTORE_PASSWORD="changeit"
-
-# Vérifier que le fichier de configuration existe
-CONFIG_FILE="$CONF_DIR/application.yml"
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "Erreur: Fichier de configuration introuvable: $CONFIG_FILE"
-  echo "Veuillez créer ce fichier avant de démarrer l'application."
-  exit 1
-fi
-
-# Fonction pour démarrer l'application
-start_app() {
-  # [code existant...]
-
-  # Charger les variables d'environnement personnalisées
-  if [ -f "$CONF_DIR/env.sh" ]; then
-    source "$CONF_DIR/env.sh"
-  fi
-
-  # Démarrer l'application
-  echo "Démarrage de mock-client-VOP avec la configuration: $CONFIG_FILE"
-  nohup java $JAVA_OPTS \
-    -Dspring.config.location=file:$CONFIG_FILE \
-    -Dlogging.file.name=$LOG_FILE \
-    -Dmock-vop.certs-dir=$CERTS_DIR \
-    -jar "$JAR_FILE" > "$INSTALL_DIR/logs/startup.log" 2>&1 &
-
-  # [reste du code existant...]
-}
-
-# [reste du script...]
+mock-vop logs 100 | grep -E "FilterChainProxy|X509|SSL|TLS|Certificate"
 ```
 
-## 2. Création de la structure de répertoires
+## 3. Correction des problèmes courants
 
-```bash
-# Créer le répertoire de configuration
-sudo mkdir -p /opt/mock-client-vop/conf
-```
+### 3.1. Configuration SSL du serveur
 
-## 3. Création du fichier application.yml dans le dossier conf
+Vérifiez et mettez à jour la configuration SSL dans votre fichier `application.yml`:
 
-```bash
-sudo tee /opt/mock-client-vop/conf/application.yml > /dev/null << 'EOF'
+```yaml
 server:
   port: 8443
-  address: 10.55.8.12  # L'adresse IP sur laquelle votre serveur écoute
   ssl:
     enabled: true
-    # Utiliser le chemin absolu vers les fichiers de certificat
     key-store: file:/opt/mock-client-vop/certs/keystore/server.jks
     key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
     key-store-type: JKS
@@ -81,556 +36,372 @@ server:
     trust-store: file:/opt/mock-client-vop/certs/truststore/truststore.jks
     trust-store-password: ${SSL_TRUSTSTORE_PASSWORD:changeit}
     trust-store-type: JKS
-    client-auth: need  # Rend l'authentification mutuelle obligatoire
-
-spring:
-  application:
-    name: mock-client-vop
-    version: 1.0.0
-
-# Configuration personnalisée pour le mock-client-VOP
-mock-vop:
-  qwac:
-    validation:
-      enabled: true
-      certificate-chain-validation: true
-      validity-period-validation: true
-      psd2-extensions-validation: true
-      organization-identifier-oid: "2.5.4.97"
-      # Dossier contenant les certificats d'AC supplémentaires
-      additional-ca-certs: file:/opt/mock-client-vop/certs/truststore/ca
-  routing:
-    enabled: true
-    certificate-owner-id-pattern: "PSDFR-ACPR-(\\d+)"
-    psp-mappings:
-      "15930": "https://backend-15930.example.com"
-      "default": "https://default-backend.example.com"
-
-logging:
-  file:
-    name: /opt/mock-client-vop/logs/mock-client-vop.log
-  level:
-    root: INFO
-    com.example.mockclientvop: DEBUG
-    org.springframework.web: INFO
-    org.springframework.security: DEBUG
-EOF
+    client-auth: need  # Assurez-vous que c'est "need" pour authentification obligatoire
+    # Ajouter ces paramètres pour plus de détails sur les erreurs
+    debug: true
+    enabled-protocols: TLSv1.2,TLSv1.3
 ```
 
-## 4. Création du fichier env.sh dans le dossier conf
+### 3.2. Ajuster la commande curl
+
+Vérifiez que votre commande curl est correcte. Voici la syntaxe recommandée:
 
 ```bash
-sudo tee /opt/mock-client-vop/conf/env.sh > /dev/null << 'EOF'
-#!/bin/bash
-
-# Configuration des mots de passe pour les keystores
-export SSL_KEYSTORE_PASSWORD="changeit"
-export SSL_TRUSTSTORE_PASSWORD="changeit"
-
-# Configuration additionnelle pour l'environnement Java
-export JAVA_OPTS="-Xms256m -Xmx512m -Dfile.encoding=UTF-8"
-EOF
-
-sudo chmod 600 /opt/mock-client-vop/conf/env.sh
+curl -v \
+  --cert /chemin/vers/certificat_client.crt \
+  --key /chemin/vers/cle_privee_client.key \
+  --cacert /chemin/vers/ca_root.crt \
+  https://10.55.8.12:8443/api/status
 ```
 
-## 5. Modification de l'application Java pour utiliser des propriétés externes
+Si vous utilisez un format PKCS12 (fichier .p12):
 
-Ajoutez une classe de configuration dans votre code source pour supporter la configuration externe:
+```bash
+curl -v \
+  --cert-type P12 \
+  --cert /chemin/vers/client.p12:mot_de_passe \
+  --cacert /chemin/vers/ca_root.crt \
+  https://10.55.8.12:8443/api/status
+```
+
+### 3.3. Configurer Spring Security pour le débogage
+
+Ajoutez cette configuration à votre fichier `application.yml` pour activer le débogage Spring Security:
+
+```yaml
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    org.apache.tomcat.util.net: DEBUG
+    org.apache.coyote.http11: DEBUG
+```
+
+### 3.4. Vérifier les certificats côté serveur
+
+Vérifiez que le truststore du serveur contient bien la chaîne de confiance du certificat client:
+
+```bash
+keytool -list -v -keystore /opt/mock-client-vop/certs/truststore/truststore.jks -storepass changeit
+```
+
+### 3.5. Créer une classe FilterChainDebugFilter pour identifier l'erreur exacte
 
 ```java
 package com.example.mockclientvop.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
-import org.springframework.context.annotation.PropertySources;
+import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-import javax.annotation.PostConstruct;
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.security.cert.X509Certificate;
 
 @Configuration
-@PropertySources({
-    @PropertySource(value = "file:${spring.config.location:classpath:application.yml}", ignoreResourceNotFound = true),
-    @PropertySource(value = "classpath:application.yml", ignoreResourceNotFound = true)
-})
-public class ExternalConfigLoader {
+public class DebugConfig {
 
-    private static final Logger logger = LoggerFactory.getLogger(ExternalConfigLoader.class);
+    private static final Logger logger = LoggerFactory.getLogger(DebugConfig.class);
 
-    @Value("${spring.config.location:classpath:application.yml}")
-    private String configLocation;
+    @Bean
+    public OncePerRequestFilter certificateDebugFilter() {
+        return new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                    throws ServletException, IOException {
+                
+                X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
+                
+                if (certs != null && certs.length > 0) {
+                    logger.info("Certificat client trouvé: Subject={}, Issuer={}",
+                            certs[0].getSubjectX500Principal().getName(),
+                            certs[0].getIssuerX500Principal().getName());
+                } else {
+                    logger.warn("Aucun certificat client trouvé dans la requête");
+                }
+                
+                // Capturer les en-têtes pour le débogage
+                logger.info("En-têtes de la requête:");
+                request.getHeaderNames().asIterator().forEachRemaining(headerName -> 
+                    logger.info("  {} = {}", headerName, request.getHeader(headerName))
+                );
+                
+                filterChain.doFilter(request, response);
+            }
+        };
+    }
 
-    @Value("${mock-vop.certs-dir:#{null}}")
-    private String certsDir;
+    @Bean
+    public FilterChainDecorator filterChainDecorator(FilterChainProxy filterChainProxy) {
+        return new FilterChainDecorator(filterChainProxy);
+    }
 
-    @PostConstruct
-    public void logConfigLocation() {
-        logger.info("Application démarrée avec le fichier de configuration: {}", configLocation);
-        if (certsDir != null) {
-            logger.info("Répertoire des certificats: {}", certsDir);
+    public static class FilterChainDecorator {
+        private static final Logger logger = LoggerFactory.getLogger(FilterChainDecorator.class);
+
+        public FilterChainDecorator(FilterChainProxy filterChainProxy) {
+            // Afficher tous les filtres dans la chaîne
+            int chainCount = 0;
+            for (SecurityFilterChain chain : filterChainProxy.getFilterChains()) {
+                logger.info("Chaîne de filtres #{}", chainCount++);
+                chain.getFilters().forEach(filter -> 
+                    logger.info("  Filtre: {}", filter.getClass().getName())
+                );
+            }
         }
     }
 }
 ```
 
-## 6. Ajouter une fonction pour recharger la configuration au script
+## 4. Script de débogage pour tester la connexion SSL
+
+Créez un script pour tester la connexion SSL avec OpenSSL:
 
 ```bash
-# Fonction pour recharger la configuration
-reload_config() {
-  if [ ! -f "$PID_FILE" ]; then
-    echo "L'application n'est pas en cours d'exécution. Démarrez-la d'abord."
-    return 1
-  fi
-  
-  PID=$(cat "$PID_FILE")
-  if ! ps -p $PID > /dev/null; then
-    echo "L'application n'est pas en cours d'exécution. Le fichier PID existe mais le processus est introuvable."
-    rm "$PID_FILE"
-    return 1
-  fi
-  
-  echo "Envoi du signal de rechargement au processus $PID..."
-  kill -HUP $PID
-  
-  echo "Configuration rechargée. Vérifiez les logs pour confirmer."
-  return 0
-}
+#!/bin/bash
 
-# Dans le case du script, ajoutez:
-case "$1" in
-  # [autres cas existants]
-  "reload")
-    reload_config
-    ;;
-  # [autres cas existants]
-esac
+# debug-ssl.sh - Script pour déboguer la connexion SSL au mock-client-VOP
+
+SERVER_HOST="10.55.8.12"
+SERVER_PORT="8443"
+CLIENT_CERT="/chemin/vers/client.crt"
+CLIENT_KEY="/chemin/vers/client.key"
+CA_CERT="/chemin/vers/ca.crt"
+
+echo "╔═══════════════════════════════════════════════════════╗"
+echo "║          DÉBOGAGE DE LA CONNEXION SSL/TLS             ║"
+echo "╚═══════════════════════════════════════════════════════╝"
+
+# Tester la connectivité de base
+echo "Test de connectivité de base..."
+nc -zv $SERVER_HOST $SERVER_PORT 2>&1 || { echo "Erreur: Impossible de se connecter au serveur"; exit 1; }
+
+# Tester avec OpenSSL pour voir les détails du certificat serveur
+echo -e "\nCertificat serveur présenté:"
+echo "==========================="
+echo | openssl s_client -connect $SERVER_HOST:$SERVER_PORT -showcerts
+
+# Tester avec OpenSSL avec le certificat client
+echo -e "\nTest de connexion avec certificat client:"
+echo "==================================="
+openssl s_client -connect $SERVER_HOST:$SERVER_PORT \
+  -cert $CLIENT_CERT \
+  -key $CLIENT_KEY \
+  -CAfile $CA_CERT \
+  -state -debug
+
+# Tester avec curl (en mode verbose)
+echo -e "\nTest avec curl (verbose):"
+echo "======================="
+curl -v \
+  --cert $CLIENT_CERT \
+  --key $CLIENT_KEY \
+  --cacert $CA_CERT \
+  https://$SERVER_HOST:$SERVER_PORT/api/status
+
+echo -e "\nTests terminés."
 ```
 
-## 7. Modification du ApplicationStartupLogger pour afficher le chemin de configuration
+## 5. Configuration avancée pour résoudre les problèmes de filtre
+
+Ajoutez cette configuration à votre classe `SecurityConfig.java`:
 
 ```java
 package com.example.mockclientvop.config;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationListener;
-import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.util.Collections;
-import java.util.Enumeration;
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
 
-@Component
-public class ApplicationStartupLogger implements ApplicationListener<ApplicationReadyEvent> {
-
-    private static final Logger logger = LoggerFactory.getLogger(ApplicationStartupLogger.class);
-
-    @Autowired
-    private Environment env;
-
-    @Value("${spring.config.location:classpath:application.yml}")
-    private String configLocation;
-
-    @Autowired
-    private RequestMappingHandlerMapping requestMappingHandlerMapping;
-
-    @Override
-    public void onApplicationEvent(ApplicationReadyEvent event) {
-        String port = env.getProperty("server.port", "8443");
-        String contextPath = env.getProperty("server.servlet.context-path", "");
-        String protocol = env.getProperty("server.ssl.enabled", "true").equals("true") ? "https" : "http";
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeRequests()
+                .requestMatchers("/error").permitAll() // Permettre l'accès aux pages d'erreur
+                .requestMatchers("/api/public/**").permitAll() // Endpoints publics si nécessaire
+                .anyRequest().authenticated()
+            .and()
+            .x509()
+                .subjectPrincipalRegex("CN=(.*?)(?:,|$)")
+                .userDetailsService(userDetailsService())
+            .and()
+            .csrf().disable();
         
-        logger.info("╔═══════════════════════════════════════════════════════════════════════════╗");
-        logger.info("║                                                                          ║");
-        logger.info("║                    MOCK-CLIENT-VOP DÉMARRÉ AVEC SUCCÈS                   ║");
-        logger.info("║                                                                          ║");
-        logger.info("╠══════════════════════════════════════════════════════════════════════════╣");
-        logger.info("║ Configuration: {}", configLocation);
+        // Ajouter le filtre de débogage au début de la chaîne
+        http.addFilterBefore(certificateDebugFilter(), BasicAuthenticationFilter.class);
         
-        // [reste du code existant...]
+        return http.build();
+    }
+    
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return subjectDN -> {
+            // Accepte tous les certificats clients valides et attribue le rôle CLIENT
+            return new User(subjectDN, "", 
+                    AuthorityUtils.commaSeparatedStringToAuthorityList("ROLE_CLIENT"));
+        };
+    }
+    
+    @Bean
+    public OncePerRequestFilter certificateDebugFilter() {
+        return new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                    throws ServletException, IOException {
+                
+                X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
+                
+                if (certs != null && certs.length > 0) {
+                    logger.info("Certificat client trouvé: Subject={}, Issuer={}",
+                            certs[0].getSubjectX500Principal().getName(),
+                            certs[0].getIssuerX500Principal().getName());
+                } else {
+                    logger.warn("Aucun certificat client trouvé dans la requête");
+                }
+                
+                filterChain.doFilter(request, response);
+            }
+        };
     }
 }
 ```
 
-## 8. Script complet pour vérifier/copier la configuration
+## 6. Créer un endpoint de test public
 
-Créez un script utilitaire pour gérer la configuration:
+Ajoutez un contrôleur avec un endpoint public pour tester la connectivité SSL de base sans authentification:
 
-```bash
-#!/bin/bash
+```java
+package com.example.mockclientvop.controller;
 
-# config-manager.sh - Script pour gérer la configuration du mock-client-VOP
-# Usage: config-manager.sh {check|backup|restore|edit}
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-INSTALL_DIR="/opt/mock-client-vop"
-CONF_DIR="$INSTALL_DIR/conf"
-CONFIG_FILE="$CONF_DIR/application.yml"
-BACKUP_DIR="$CONF_DIR/backups"
+import java.util.HashMap;
+import java.util.Map;
 
-# Fonction d'aide
-usage() {
-  echo "Usage: $0 COMMAND"
-  echo ""
-  echo "Commandes:"
-  echo "  check              Vérifier la configuration actuelle"
-  echo "  backup [suffix]    Sauvegarder la configuration (avec suffixe optionnel)"
-  echo "  restore [file]     Restaurer une configuration (depuis fichier ou dernière sauvegarde)"
-  echo "  edit               Ouvrir le fichier de configuration dans l'éditeur par défaut"
-  exit 1
+@RestController
+@RequestMapping("/api/public")
+public class PublicApiController {
+
+    @GetMapping("/health")
+    public Map<String, Object> health() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "UP");
+        response.put("message", "Le serveur est en cours d'exécution");
+        return response;
+    }
 }
-
-# Vérifier les arguments
-if [ $# -lt 1 ]; then
-  usage
-fi
-
-# Créer le répertoire de sauvegarde s'il n'existe pas
-mkdir -p "$BACKUP_DIR"
-
-# Fonction pour vérifier la configuration
-check_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Erreur: Fichier de configuration introuvable: $CONFIG_FILE"
-    return 1
-  fi
-  
-  echo "Fichier de configuration: $CONFIG_FILE"
-  echo ""
-  echo "Contenu du fichier:"
-  echo "-------------------"
-  cat "$CONFIG_FILE" | grep -v "password:"
-  echo ""
-  echo "Validation avec YQ (si disponible):"
-  if command -v yq &> /dev/null; then
-    yq validate "$CONFIG_FILE" && echo "✓ Configuration valide" || echo "✗ Configuration invalide"
-  else
-    echo "YQ non installé, impossible de valider le YAML"
-  fi
-}
-
-# Fonction pour sauvegarder la configuration
-backup_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Erreur: Fichier de configuration introuvable: $CONFIG_FILE"
-    return 1
-  fi
-  
-  SUFFIX=${1:-$(date +"%Y%m%d_%H%M%S")}
-  BACKUP_FILE="$BACKUP_DIR/application_$SUFFIX.yml"
-  
-  cp "$CONFIG_FILE" "$BACKUP_FILE"
-  echo "Configuration sauvegardée dans: $BACKUP_FILE"
-}
-
-# Fonction pour restaurer la configuration
-restore_config() {
-  RESTORE_FILE="$1"
-  
-  # Si aucun fichier n'est spécifié, utiliser la dernière sauvegarde
-  if [ -z "$RESTORE_FILE" ]; then
-    RESTORE_FILE=$(ls -t "$BACKUP_DIR"/application_*.yml 2>/dev/null | head -1)
-    if [ -z "$RESTORE_FILE" ]; then
-      echo "Erreur: Aucune sauvegarde disponible"
-      return 1
-    fi
-  fi
-  
-  if [ ! -f "$RESTORE_FILE" ]; then
-    echo "Erreur: Fichier de sauvegarde introuvable: $RESTORE_FILE"
-    return 1
-  fi
-  
-  # Sauvegarder la configuration actuelle avant de la remplacer
-  if [ -f "$CONFIG_FILE" ]; then
-    backup_config "before_restore"
-  fi
-  
-  cp "$RESTORE_FILE" "$CONFIG_FILE"
-  echo "Configuration restaurée depuis: $RESTORE_FILE"
-}
-
-# Fonction pour éditer la configuration
-edit_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Le fichier de configuration n'existe pas, création d'un fichier vide"
-    mkdir -p "$CONF_DIR"
-    touch "$CONFIG_FILE"
-  fi
-  
-  # Déterminer l'éditeur à utiliser
-  EDITOR=${EDITOR:-vi}
-  if command -v nano &> /dev/null; then
-    EDITOR="nano"
-  fi
-  
-  $EDITOR "$CONFIG_FILE"
-}
-
-# Traiter les commandes
-case "$1" in
-  "check")
-    check_config
-    ;;
-  "backup")
-    backup_config "$2"
-    ;;
-  "restore")
-    restore_config "$2"
-    ;;
-  "edit")
-    edit_config
-    ;;
-  *)
-    echo "Commande non reconnue: $1"
-    usage
-    ;;
-esac
-
-exit 0
 ```
 
-## 9. Intégration dans le script principal mock-vop.sh
+## 7. Mise à jour du script mock-vop.sh pour plus de diagnostic
 
-Modifiez votre script principal pour inclure les nouvelles fonctionnalités:
+Ajoutez une fonction de vérification SSL au script `mock-vop.sh`:
 
 ```bash
-#!/bin/bash
-
-# mock-vop.sh - Script de gestion pour le mock-client-VOP
-# Usage: mock-vop.sh {start|stop|status|restart|logs|cert-list|cert-import|cert-validate|config}
-
-# Déterminer le répertoire d'installation
-INSTALL_DIR="/opt/mock-client-vop"
-CONF_DIR="$INSTALL_DIR/conf"
-JAVA_OPTS="-Xms256m -Xmx512m"
-PID_FILE="$INSTALL_DIR/mock-client-vop.pid"
-JAR_FILE=$(ls -t $INSTALL_DIR/lib/mock-client-vop-*.jar 2>/dev/null | head -1)
-LOG_FILE="$INSTALL_DIR/logs/mock-client-vop.log"
-CERTS_DIR="$INSTALL_DIR/certs"
-TRUSTSTORE_DIR="$CERTS_DIR/truststore"
-KEYSTORE_DIR="$CERTS_DIR/keystore"
-TRUSTSTORE_FILE="$TRUSTSTORE_DIR/truststore.jks"
-KEYSTORE_FILE="$KEYSTORE_DIR/server.jks"
-TRUSTSTORE_PASSWORD="changeit"
-CONFIG_FILE="$CONF_DIR/application.yml"
-
-# Fonction d'aide
-usage() {
-  echo "Usage: $0 COMMAND [options]"
-  echo ""
-  echo "Gestion du mock-client-VOP:"
-  echo "  start                   Démarrer le mock-client-VOP"
-  echo "  stop                    Arrêter le mock-client-VOP"
-  echo "  status                  Afficher le statut du mock-client-VOP"
-  echo "  restart                 Redémarrer le mock-client-VOP"
-  echo "  logs [n]                Afficher les n dernières lignes des logs (défaut: 50)"
-  echo ""
-  echo "Gestion des certificats:"
-  echo "  certs                   Vérifier les certificats disponibles"
-  echo "  cert-list               Lister les certificats dans le truststore"
-  echo "  cert-import FILE ALIAS  Importer un certificat d'AC dans le truststore"
-  echo "  cert-validate FILE      Valider un certificat QWAC avec le truststore"
-  echo ""
-  echo "Gestion de la configuration:"
-  echo "  config check            Vérifier la configuration actuelle"
-  echo "  config backup [suffix]  Sauvegarder la configuration"
-  echo "  config restore [file]   Restaurer une configuration"
-  echo "  config edit             Éditer le fichier de configuration"
-  exit 1
-}
-
-# [autres fonctions existantes...]
-
-# Fonction pour gérer la configuration
-manage_config() {
-  if [ $# -lt 1 ]; then
-    echo "Erreur: Action de configuration non spécifiée"
-    return 1
-  fi
+# Fonction pour tester la configuration SSL
+test_ssl() {
+  SERVER_HOST=${1:-"localhost"}
+  SERVER_PORT=${2:-"8443"}
   
-  case "$1" in
-    "check")
-      check_config
-      ;;
-    "backup")
-      backup_config "$2"
-      ;;
-    "restore")
-      restore_config "$2"
-      ;;
-    "edit")
-      edit_config
-      ;;
-    *)
-      echo "Action de configuration non reconnue: $1"
-      return 1
-      ;;
-  esac
-}
-
-# Fonction pour vérifier la configuration
-check_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Erreur: Fichier de configuration introuvable: $CONFIG_FILE"
-    return 1
-  fi
+  echo "╔═══════════════════════════════════════════════════════╗"
+  echo "║          TEST DE LA CONFIGURATION SSL/TLS             ║"
+  echo "╚═══════════════════════════════════════════════════════╝"
   
-  echo "Fichier de configuration: $CONFIG_FILE"
-  echo ""
-  echo "Contenu du fichier (sans mots de passe):"
-  echo "-------------------"
-  cat "$CONFIG_FILE" | grep -v "password:"
-  echo ""
-  echo "Validation avec YQ (si disponible):"
-  if command -v yq &> /dev/null; then
-    yq validate "$CONFIG_FILE" && echo "✓ Configuration valide" || echo "✗ Configuration invalide"
-  else
-    echo "YQ non installé, impossible de valider le YAML"
-  fi
-}
-
-# Fonction pour sauvegarder la configuration
-backup_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Erreur: Fichier de configuration introuvable: $CONFIG_FILE"
-    return 1
-  fi
+  # Tester la connectivité de base
+  echo "Test de connectivité de base..."
+  nc -zv $SERVER_HOST $SERVER_PORT 2>&1 || { echo "Erreur: Impossible de se connecter au serveur"; return 1; }
   
-  BACKUP_DIR="$CONF_DIR/backups"
-  mkdir -p "$BACKUP_DIR"
+  # Tester avec OpenSSL pour voir les détails du certificat serveur
+  echo -e "\nCertificat serveur présenté:"
+  echo "==========================="
+  echo | openssl s_client -connect $SERVER_HOST:$SERVER_PORT -showcerts | grep -E "subject|issuer|verify"
   
-  SUFFIX=${1:-$(date +"%Y%m%d_%H%M%S")}
-  BACKUP_FILE="$BACKUP_DIR/application_$SUFFIX.yml"
+  # Vérifier si le serveur demande un certificat client
+  echo -e "\nVérification de la demande de certificat client:"
+  echo "======================================="
+  echo | openssl s_client -connect $SERVER_HOST:$SERVER_PORT -state | grep -E "Certificate chain|Acceptable client certificate"
   
-  cp "$CONFIG_FILE" "$BACKUP_FILE"
-  echo "Configuration sauvegardée dans: $BACKUP_FILE"
-}
-
-# Fonction pour restaurer la configuration
-restore_config() {
-  BACKUP_DIR="$CONF_DIR/backups"
-  RESTORE_FILE="$1"
-  
-  # Si aucun fichier n'est spécifié, utiliser la dernière sauvegarde
-  if [ -z "$RESTORE_FILE" ]; then
-    RESTORE_FILE=$(ls -t "$BACKUP_DIR"/application_*.yml 2>/dev/null | head -1)
-    if [ -z "$RESTORE_FILE" ]; then
-      echo "Erreur: Aucune sauvegarde disponible"
-      return 1
-    fi
-  fi
-  
-  if [ ! -f "$RESTORE_FILE" ]; then
-    echo "Erreur: Fichier de sauvegarde introuvable: $RESTORE_FILE"
-    return 1
-  fi
-  
-  # Sauvegarder la configuration actuelle avant de la remplacer
-  if [ -f "$CONFIG_FILE" ]; then
-    backup_config "before_restore"
-  fi
-  
-  cp "$RESTORE_FILE" "$CONFIG_FILE"
-  echo "Configuration restaurée depuis: $RESTORE_FILE"
-}
-
-# Fonction pour éditer la configuration
-edit_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Le fichier de configuration n'existe pas, création d'un fichier vide"
-    mkdir -p "$CONF_DIR"
-    touch "$CONFIG_FILE"
-  fi
-  
-  # Déterminer l'éditeur à utiliser
-  EDITOR=${EDITOR:-vi}
-  if command -v nano &> /dev/null; then
-    EDITOR="nano"
-  fi
-  
-  $EDITOR "$CONFIG_FILE"
+  echo -e "\nTests terminés."
 }
 
 # Dans le case du script, ajoutez:
 case "$1" in
   # [autres cas existants]
-  "config")
-    shift
-    manage_config "$@"
+  "test-ssl")
+    test_ssl "$2" "$3"
     ;;
   # [autres cas existants]
 esac
 ```
 
-## Structure de répertoire finale
+## 8. Solutions spécifiques selon l'erreur exacte
 
-```
-/opt/mock-client-vop/
-├── bin/
-│   └── mock-vop.sh
-├── conf/               # Dossier de configuration
-│   ├── application.yml # Fichier de configuration principal
-│   ├── env.sh          # Variables d'environnement
-│   └── backups/        # Sauvegardes de configuration
-├── logs/
-│   └── mock-client-vop.log
-├── certs/
-│   ├── keystore/
-│   │   ├── server.jks
-│   │   ├── server.crt
-│   │   └── server.key
-│   └── truststore/
-│       ├── truststore.jks
-│       ├── ca.crt
-│       └── ca/
-│           ├── ac1.crt
-│           ├── ac2.crt
-│           └── ac3.crt
-└── lib/
-    └── mock-client-vop-1.0.0.jar
+Maintenant que vous avez des outils pour diagnostiquer le problème, voici les solutions pour les erreurs les plus courantes:
+
+### 8.1. Si le serveur ne reconnaît pas l'AC qui a signé le certificat client
+
+```bash
+# Importez l'AC racine dans le truststore
+keytool -importcert -file /chemin/vers/ca_racine.crt -alias ca-racine \
+  -keystore /opt/mock-client-vop/certs/truststore/truststore.jks -storepass changeit -noprompt
+
+# Si nécessaire, importez également l'AC intermédiaire
+keytool -importcert -file /chemin/vers/ca_intermediaire.crt -alias ca-intermediaire \
+  -keystore /opt/mock-client-vop/certs/truststore/truststore.jks -storepass changeit -noprompt
+
+# Redémarrez le serveur
+mock-vop restart
 ```
 
-## Installation et utilisation
+### 8.2. Si les versions de TLS ne sont pas compatibles
 
-1. Créez la structure de répertoires:
-   ```bash
-   sudo mkdir -p /opt/mock-client-vop/{bin,conf/backups,logs,certs/{keystore,truststore/ca},lib}
-   ```
+Modifiez la configuration SSL dans `application.yml`:
 
-2. Copiez le script et rendez-le exécutable:
-   ```bash
-   sudo cp mock-vop.sh /opt/mock-client-vop/bin/
-   sudo chmod +x /opt/mock-client-vop/bin/mock-vop.sh
-   sudo ln -s /opt/mock-client-vop/bin/mock-vop.sh /usr/local/bin/mock-vop
-   ```
+```yaml
+server:
+  ssl:
+    enabled-protocols: TLSv1.2,TLSv1.3
+    ciphers: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384
+```
 
-3. Créez une configuration initiale:
-   ```bash
-   mock-vop config edit
-   ```
+### 8.3. Si le certificat client n'est pas au bon format
 
-4. Vérifiez la configuration:
-   ```bash
-   mock-vop config check
-   ```
+Convertissez le certificat client au format approprié:
 
-5. Vérifiez les certificats:
-   ```bash
-   mock-vop certs
-   ```
+```bash
+# Convertir un certificat PEM en PKCS12
+openssl pkcs12 -export -in client.crt -inkey client.key -out client.p12 -name "client"
 
-6. Démarrez le service:
-   ```bash
-   mock-vop start
-   ```
+# Utiliser le certificat PKCS12 avec curl
+curl -v --cert-type P12 --cert client.p12:password --cacert ca.crt https://10.55.8.12:8443/api/status
+```
 
-Avec cette configuration, votre application lira le fichier `application.yml` depuis `/opt/mock-client-vop/conf/` au démarrage, et vous pourrez facilement le modifier sans avoir à reconstruire l'application.
+## 9. Vérifiez également ces erreurs fréquentes
+
+1. **Noms DNS/IP incorrects**: Assurez-vous que le nom d'hôte ou l'IP utilisé dans l'URL correspond bien à un nom ou IP inclus dans le certificat serveur (dans le champ CN ou SAN).
+
+2. **Clés privées protégées par mot de passe**: Si la clé privée est protégée par un mot de passe, assurez-vous de l'inclure dans la commande curl.
+
+3. **Dates de validité**: Vérifiez que les certificats (serveur et client) sont valides et n'ont pas expiré.
+
+4. **Ordre de la chaîne de certificats**: L'ordre des certificats dans la chaîne peut être important. Assurez-vous que le certificat client est suivi de tout certificat intermédiaire, puis de l'AC racine.
+
+En appliquant ces corrections et outils de diagnostic, vous devriez pouvoir identifier et résoudre le problème d'erreur "in position 10 of 12 in FilterChainProxy" lors de l'utilisation de curl pour tester votre mock-client-VOP.
