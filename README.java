@@ -1,576 +1,356 @@
-  # Ajout d'une fonctionnalité de réponses personnalisées par banque dans le mock-client-VOP
+ # Refactorisation du code CertificateUtils
 
-Pour implémenter cette fonctionnalité qui permet au mock de répondre différemment selon la banque identifiée (à partir de l'URL ou du certificat), voici les étapes à suivre:
-
-## 1. Création du fichier de configuration des réponses
-
-Créez un fichier `bank-responses.yml` dans le dossier `/opt/mock-client-vop/conf/`:
-
-```yaml
-# Configuration des réponses personnalisées par banque
-responses:
-  # Réponses par défaut (utilisées si aucune banque spécifique ne correspond)
-  default:
-    status: 200
-    headers:
-      Content-Type: application/json
-    body: |
-      {
-        "status": "success",
-        "message": "Réponse par défaut",
-        "timestamp": "${timestamp}"
-      }
-
-  # Réponses spécifiques par banque, identifiées par leur PSP ID (PSDFR-ACPR-XXXXX)
-  banks:
-    # BNP Paribas
-    "12345":
-      status: 200
-      headers:
-        Content-Type: application/json
-        X-BNP-Api-Version: "1.0"
-      body: |
-        {
-          "status": "success",
-          "bank": "BNP Paribas",
-          "pspId": "PSDFR-ACPR-12345",
-          "message": "Connexion établie avec BNP Paribas",
-          "timestamp": "${timestamp}",
-          "accountDetails": {
-            "available": true,
-            "endpoint": "/api/bnp/accounts"
-          }
-        }
-
-    # Natixis
-    "15930":
-      status: 200
-      headers:
-        Content-Type: application/json
-        X-Natixis-TraceId: "${requestId}"
-      body: |
-        {
-          "status": "success",
-          "bank": "Natixis",
-          "pspId": "PSDFR-ACPR-15930",
-          "message": "Connexion établie avec Natixis",
-          "timestamp": "${timestamp}",
-          "features": ["payments", "accounts", "balances"]
-        }
-
-    # Société Générale
-    "24680":
-      status: 200
-      headers:
-        Content-Type: application/json
-        X-SG-Channel: "api-psd2"
-      body: |
-        {
-          "status": "success",
-          "bank": "Société Générale",
-          "pspId": "PSDFR-ACPR-24680",
-          "message": "Connexion établie avec Société Générale",
-          "timestamp": "${timestamp}",
-          "region": "FR",
-          "api": {
-            "version": "v3",
-            "documentation": "https://developer.socgen.com/docs"
-          }
-        }
-
-  # Réponses spécifiques par URL (pattern matching)
-  urls:
-    # Correspond à toutes les URLs contenant "credit-mutuel"
-    "credit-mutuel":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success",
-          "bank": "Crédit Mutuel",
-          "message": "Connexion établie avec Crédit Mutuel via URL",
-          "timestamp": "${timestamp}"
-        }
-
-    # Correspond à toutes les URLs contenant "caisse-epargne"
-    "caisse-epargne":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success",
-          "bank": "Caisse d'Epargne",
-          "message": "Connexion établie avec Caisse d'Epargne via URL",
-          "timestamp": "${timestamp}"
-        }
-```
-
-## 2. Création de la classe de configuration pour charger les réponses
+Voici le code refactorisé pour la classe CertificateUtils, avec une meilleure gestion des erreurs, une organisation plus claire, et des méthodes plus ciblées:
 
 ```java
-package com.example.mockclientvop.config;
+package com.example.mockclientvop.util;
 
+import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.ASN1Primitive;
+import org.bouncycastle.asn1.DERIA5String;
+import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.DERPrintableString;
+import org.bouncycastle.asn1.DERUTF8String;
+import org.bouncycastle.asn1.x500.RDN;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
-import org.yaml.snakeyaml.Yaml;
+import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-@Configuration
-public class BankResponsesConfig {
+/**
+ * Utilitaire pour la manipulation et validation des certificats X.509,
+ * spécialement pour les certificats QWAC (Qualified Website Authentication Certificate) utilisés dans PSD2.
+ */
+@Component
+public class CertificateUtils {
 
-    private static final Logger logger = LoggerFactory.getLogger(BankResponsesConfig.class);
+    private static final Logger logger = LoggerFactory.getLogger(CertificateUtils.class);
+    private static final String PSD2_PATTERN = "PSDFR-ACPR-(\\d+)";
 
-    @Value("${mock-vop.bank-responses-file:file:/opt/mock-client-vop/conf/bank-responses.yml}")
-    private Resource bankResponsesFile;
-
-    private Map<String, Object> responsesConfig = new HashMap<>();
-
-    @PostConstruct
-    public void loadResponses() {
+    /**
+     * Extrait l'identifiant d'organisation (Organization Identifier) du certificat.
+     * Cherche d'abord dans le sujet du certificat, puis dans les extensions si nécessaire.
+     *
+     * @param certificate Le certificat X.509 à analyser
+     * @return Un Optional contenant l'identifiant d'organisation si trouvé, sinon Optional.empty()
+     */
+    public Optional<String> extractOrganizationIdFromCertificate(X509Certificate certificate) {
         try {
-            if (bankResponsesFile.exists()) {
-                Yaml yaml = new Yaml();
-                try (InputStream inputStream = bankResponsesFile.getInputStream()) {
-                    responsesConfig = yaml.load(inputStream);
-                    logger.info("Fichier de configuration des réponses par banque chargé: {}", 
-                        bankResponsesFile.getFilename());
-                    
-                    // Log du nombre de configurations chargées
-                    Map<String, Object> responses = getResponsesSection();
-                    Map<String, Object> banks = getBanksSection();
-                    Map<String, Object> urls = getUrlsSection();
-                    
-                    logger.info("Configurations chargées: {} banques par ID PSP, {} banques par URL", 
-                        banks != null ? banks.size() : 0, 
-                        urls != null ? urls.size() : 0);
-                }
-            } else {
-                logger.warn("Fichier de configuration des réponses par banque introuvable: {}", 
-                    bankResponsesFile.getFilename());
+            // 1. Tenter d'extraire du sujet du certificat
+            Optional<String> orgId = extractOrganizationIdFromSubject(certificate);
+            if (orgId.isPresent()) {
+                return orgId;
+            }
+
+            // 2. Si non trouvé dans le sujet, chercher dans les extensions
+            return extractOrganizationIdFromExtensions(certificate);
+        } catch (CertificateEncodingException e) {
+            logger.error("Erreur lors de l'extraction de l'identifiant d'organisation", e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Extrait l'identifiant PSP à partir de l'identifiant d'organisation en utilisant une expression régulière.
+     *
+     * @param organizationId L'identifiant d'organisation (format PSDFR-ACPR-XXXXX)
+     * @param pattern L'expression régulière pour extraire l'ID PSP (doit contenir un groupe de capture)
+     * @return Un Optional contenant l'identifiant PSP si trouvé, sinon Optional.empty()
+     */
+    public Optional<String> extractPSPIdFromOrganizationId(String organizationId, String pattern) {
+        try {
+            Pattern regex = Pattern.compile(pattern);
+            Matcher matcher = regex.matcher(organizationId);
+            
+            if (matcher.find() && matcher.groupCount() >= 1) {
+                return Optional.of(matcher.group(1));
+            }
+            
+            return Optional.empty();
+        } catch (Exception e) {
+            logger.error("Erreur lors de l'extraction de l'identifiant PSP", e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Valide un certificat QWAC en vérifiant sa période de validité et la présence
+     * d'un identifiant d'organisation au format PSD2 valide.
+     *
+     * @param certificate Le certificat QWAC à valider
+     * @return true si le certificat est valide, false sinon
+     */
+    public boolean validateQWACCertificate(X509Certificate certificate) {
+        try {
+            // 1. Vérifier la période de validité du certificat
+            certificate.checkValidity();
+            
+            // 2. Vérifier la présence de l'identifiant d'organisation
+            Optional<String> orgId = extractOrganizationIdFromCertificate(certificate);
+            if (!orgId.isPresent()) {
+                logger.warn("Identifiant d'organisation absent dans le certificat");
+                return false;
+            }
+            
+            // 3. Vérifier le format de l'identifiant d'organisation (PSDFR-ACPR-XXXXX)
+            Optional<String> pspId = extractPSPIdFromOrganizationId(orgId.get(), PSD2_PATTERN);
+            return pspId.isPresent();
+        } catch (CertificateException e) {
+            logger.error("Certificat invalide ou expiré", e);
+            return false;
+        }
+    }
+
+    /**
+     * Extrait l'identifiant d'organisation à partir du sujet du certificat.
+     *
+     * @param certificate Le certificat X.509
+     * @return Un Optional contenant l'identifiant d'organisation si trouvé dans le sujet
+     * @throws CertificateEncodingException Si le certificat ne peut pas être décodé
+     */
+    private Optional<String> extractOrganizationIdFromSubject(X509Certificate certificate) throws CertificateEncodingException {
+        X500Name x500name = new JcaX509CertificateHolder(certificate).getSubject();
+        RDN[] rdns = x500name.getRDNs(BCStyle.ORGANIZATION_IDENTIFIER);
+        
+        if (rdns.length > 0) {
+            return Optional.of(rdns[0].getFirst().getValue().toString());
+        }
+        
+        return Optional.empty();
+    }
+
+    /**
+     * Extrait l'identifiant d'organisation à partir des extensions du certificat.
+     *
+     * @param certificate Le certificat X.509
+     * @return Un Optional contenant l'identifiant d'organisation si trouvé dans les extensions
+     */
+    private Optional<String> extractOrganizationIdFromExtensions(X509Certificate certificate) {
+        byte[] extensionValue = certificate.getExtensionValue(BCStyle.ORGANIZATION_IDENTIFIER.toString());
+        if (extensionValue == null) {
+            return Optional.empty();
+        }
+
+        try (ASN1InputStream asn1Stream = new ASN1InputStream(extensionValue)) {
+            ASN1Primitive derObject = asn1Stream.readObject();
+            if (!(derObject instanceof DEROctetString)) {
+                return Optional.empty();
+            }
+            
+            byte[] octets = ((DEROctetString) derObject).getOctets();
+            try (ASN1InputStream asn1Stream2 = new ASN1InputStream(octets)) {
+                ASN1Primitive asn1Value = asn1Stream2.readObject();
+                return Optional.of(decodeASN1Value(asn1Value));
             }
         } catch (IOException e) {
-            logger.error("Erreur lors du chargement du fichier de configuration des réponses par banque", e);
+            logger.error("Erreur lors de la lecture des extensions du certificat", e);
+            return Optional.empty();
         }
     }
 
-    @Bean
-    public Map<String, Object> bankResponsesConfig() {
-        return responsesConfig;
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getResponsesSection() {
-        return (Map<String, Object>) responsesConfig.getOrDefault("responses", new HashMap<>());
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getDefaultResponse() {
-        Map<String, Object> responses = getResponsesSection();
-        return (Map<String, Object>) responses.getOrDefault("default", new HashMap<>());
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getBanksSection() {
-        Map<String, Object> responses = getResponsesSection();
-        return (Map<String, Object>) responses.getOrDefault("banks", new HashMap<>());
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getUrlsSection() {
-        Map<String, Object> responses = getResponsesSection();
-        return (Map<String, Object>) responses.getOrDefault("urls", new HashMap<>());
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getBankResponseByPspId(String pspId) {
-        Map<String, Object> banks = getBanksSection();
-        return (Map<String, Object>) banks.getOrDefault(pspId, null);
-    }
-
-    public Map<String, Object> getBankResponseByUrl(String url) {
-        Map<String, Object> urls = getUrlsSection();
-        
-        // Chercher une correspondance partielle dans l'URL
-        for (Map.Entry<String, Object> entry : urls.entrySet()) {
-            if (url != null && url.contains(entry.getKey())) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = (Map<String, Object>) entry.getValue();
-                return response;
-            }
+    /**
+     * Décode une valeur ASN.1 en chaîne de caractères selon son type.
+     *
+     * @param asn1Value La valeur ASN.1 à décoder
+     * @return La valeur décodée en chaîne de caractères
+     */
+    private String decodeASN1Value(ASN1Primitive asn1Value) {
+        if (asn1Value instanceof DEROctetString) {
+            return new String(((DEROctetString) asn1Value).getOctets(), StandardCharsets.UTF_8);
+        } else if (asn1Value instanceof DERPrintableString) {
+            return ((DERPrintableString) asn1Value).getString();
+        } else if (asn1Value instanceof DERUTF8String) {
+            return ((DERUTF8String) asn1Value).getString();
+        } else if (asn1Value instanceof DERIA5String) {
+            return ((DERIA5String) asn1Value).getString();
+        } else {
+            // Fallback pour d'autres types d'objets ASN.1
+            return asn1Value.toString();
         }
-        
-        return null;
     }
 }
 ```
 
-## 3. Création d'un service pour gérer les réponses personnalisées
+# Tests unitaires pour CertificateUtils
+
+Voici les tests unitaires pour valider le fonctionnement de la classe CertificateUtils:
 
 ```java
-package com.example.mockclientvop.service;
+package com.example.mockclientvop.util;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
-import com.example.mockclientvop.config.BankResponsesConfig;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
-@Service
-public class BankResponseService {
-
-    private static final Logger logger = LoggerFactory.getLogger(BankResponseService.class);
-
-    @Autowired
-    private BankResponsesConfig bankResponsesConfig;
-
-    public ResponseEntity<String> generateResponse(String pspId, String requestUrl) {
-        // Variables pour les réponses dynamiques
-        Map<String, String> variables = new HashMap<>();
-        variables.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
-        variables.put("requestId", UUID.randomUUID().toString());
-        variables.put("pspId", pspId != null ? pspId : "unknown");
-        
-        // Chercher une réponse par PSP ID
-        Map<String, Object> responseConfig = null;
-        String responseSource = null;
-        
-        if (pspId != null) {
-            responseConfig = bankResponsesConfig.getBankResponseByPspId(pspId);
-            if (responseConfig != null) {
-                responseSource = "PSP ID " + pspId;
-            }
-        }
-        
-        // Si aucune réponse trouvée par PSP ID, chercher par URL
-        if (responseConfig == null && requestUrl != null) {
-            responseConfig = bankResponsesConfig.getBankResponseByUrl(requestUrl);
-            if (responseConfig != null) {
-                responseSource = "URL pattern";
-            }
-        }
-        
-        // Si aucune réponse spécifique trouvée, utiliser la réponse par défaut
-        if (responseConfig == null) {
-            responseConfig = bankResponsesConfig.getDefaultResponse();
-            responseSource = "default";
-        }
-        
-        // Générer la réponse HTTP
-        logger.info("Génération d'une réponse personnalisée (source: {})", responseSource);
-        
-        // Récupérer les éléments de la réponse
-        int status = ((Number) responseConfig.getOrDefault("status", 200)).intValue();
-        @SuppressWarnings("unchecked")
-        Map<String, String> headers = (Map<String, String>) responseConfig.getOrDefault("headers", new HashMap<>());
-        String body = (String) responseConfig.getOrDefault("body", "{}");
-        
-        // Remplacer les variables dans le corps de la réponse
-        for (Map.Entry<String, String> variable : variables.entrySet()) {
-            body = body.replace("${" + variable.getKey() + "}", variable.getValue());
-        }
-        
-        // Construire la réponse HTTP
-        HttpHeaders httpHeaders = new HttpHeaders();
-        headers.forEach(httpHeaders::add);
-        
-        return ResponseEntity
-                .status(HttpStatus.valueOf(status))
-                .headers(httpHeaders)
-                .body(body);
-    }
-}
-```
-
-## 4. Modification du contrôleur pour utiliser les réponses personnalisées
-
-```java
-package com.example.mockclientvop.controller;
-
-import com.example.mockclientvop.service.BankResponseService;
-import com.example.mockclientvop.service.CertificateService;
-import com.example.mockclientvop.service.RoutingService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import javax.servlet.http.HttpServletRequest;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.Security;
 import java.security.cert.X509Certificate;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Date;
 import java.util.Optional;
 
-@RestController
-@RequestMapping("/api")
-public class MockController {
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
-    private static final Logger logger = LoggerFactory.getLogger(MockController.class);
-    
-    @Autowired
-    private CertificateService certificateService;
-    
-    @Autowired
-    private RoutingService routingService;
-    
-    @Autowired
-    private BankResponseService bankResponseService;
+class CertificateUtilsTest {
 
-    @GetMapping("/status")
-    public ResponseEntity<?> getStatus(HttpServletRequest request) {
-        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
-        
-        if (certs == null || certs.length == 0) {
-            logger.error("No client certificate provided");
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "No client certificate provided");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-        }
-        
-        X509Certificate clientCert = certs[0];
-        
-        // Validation du certificat QWAC
-        boolean isValid = certificateService.validateQWACCertificate(clientCert);
-        if (!isValid) {
-            logger.error("Invalid QWAC certificate");
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "Invalid QWAC certificate");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-        }
-        
-        // Extraction du PSP ID
-        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(clientCert);
-        String pspIdValue = pspId.orElse(null);
-        
-        // Générer une réponse personnalisée en fonction du PSP ID et de l'URL
-        return bankResponseService.generateResponse(pspIdValue, request.getRequestURI());
+    private CertificateUtils certificateUtils;
+    private static X509Certificate validCertificate;
+    private static X509Certificate expiredCertificate;
+    private static X509Certificate noPSD2Certificate;
+
+    @BeforeAll
+    static void setUpBeforeAll() throws Exception {
+        // Initialiser le fournisseur BouncyCastle
+        Security.addProvider(new BouncyCastleProvider());
+
+        // Générer une paire de clés pour les tests
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+        PrivateKey privateKey = keyPair.getPrivate();
+
+        // Créer un certificat valide avec un identifiant d'organisation PSD2
+        validCertificate = generateCertificate(privateKey, "CN=Test,O=Test Organization,OU=Test Department,ORGANIZATIONIDENTIFIER=PSDFR-ACPR-12345", 
+                new Date(System.currentTimeMillis() - 86400000), // Hier
+                new Date(System.currentTimeMillis() + 86400000)); // Demain
+
+        // Créer un certificat expiré
+        expiredCertificate = generateCertificate(privateKey, "CN=Test,O=Test Organization,OU=Test Department,ORGANIZATIONIDENTIFIER=PSDFR-ACPR-12345", 
+                new Date(System.currentTimeMillis() - 172800000), // Avant-hier
+                new Date(System.currentTimeMillis() - 86400000)); // Hier
+
+        // Créer un certificat sans identifiant d'organisation PSD2
+        noPSD2Certificate = generateCertificate(privateKey, "CN=Test,O=Test Organization,OU=Test Department",
+                new Date(System.currentTimeMillis() - 86400000), // Hier
+                new Date(System.currentTimeMillis() + 86400000)); // Demain
     }
-    
-    @RequestMapping("/**")
-    public ResponseEntity<?> handleRequest(HttpServletRequest request) {
-        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
-        
-        if (certs == null || certs.length == 0) {
-            logger.error("No client certificate provided");
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "No client certificate provided");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+
+    @BeforeEach
+    void setUp() {
+        certificateUtils = new CertificateUtils();
+    }
+
+    @Test
+    void extractOrganizationIdFromCertificate_shouldReturnOrganizationId_whenPresent() {
+        Optional<String> result = certificateUtils.extractOrganizationIdFromCertificate(validCertificate);
+        assertTrue(result.isPresent());
+        assertEquals("PSDFR-ACPR-12345", result.get());
+    }
+
+    @Test
+    void extractOrganizationIdFromCertificate_shouldReturnEmpty_whenNotPresent() {
+        Optional<String> result = certificateUtils.extractOrganizationIdFromCertificate(noPSD2Certificate);
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void extractPSPIdFromOrganizationId_shouldReturnPSPId_whenValidFormat() {
+        Optional<String> result = certificateUtils.extractPSPIdFromOrganizationId("PSDFR-ACPR-12345", "PSDFR-ACPR-(\\d+)");
+        assertTrue(result.isPresent());
+        assertEquals("12345", result.get());
+    }
+
+    @Test
+    void extractPSPIdFromOrganizationId_shouldReturnEmpty_whenInvalidFormat() {
+        Optional<String> result = certificateUtils.extractPSPIdFromOrganizationId("INVALID-FORMAT", "PSDFR-ACPR-(\\d+)");
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void validateQWACCertificate_shouldReturnTrue_whenCertificateIsValid() {
+        boolean result = certificateUtils.validateQWACCertificate(validCertificate);
+        assertTrue(result);
+    }
+
+    @Test
+    void validateQWACCertificate_shouldReturnFalse_whenCertificateIsExpired() {
+        boolean result = certificateUtils.validateQWACCertificate(expiredCertificate);
+        assertFalse(result);
+    }
+
+    @Test
+    void validateQWACCertificate_shouldReturnFalse_whenNoPSD2Identifier() {
+        boolean result = certificateUtils.validateQWACCertificate(noPSD2Certificate);
+        assertFalse(result);
+    }
+
+    @Test
+    void validateQWACCertificate_shouldHandleExceptions() {
+        // Créer un mock de certificat qui lance une exception lors de la vérification de validité
+        X509Certificate mockCertificate = Mockito.mock(X509Certificate.class);
+        try {
+            when(mockCertificate.checkValidity()).thenThrow(new RuntimeException("Test exception"));
+            
+            boolean result = certificateUtils.validateQWACCertificate(mockCertificate);
+            assertFalse(result);
+        } catch (Exception e) {
+            fail("Exception should have been caught: " + e.getMessage());
         }
+    }
+
+    // Méthode utilitaire pour générer des certificats de test
+    private static X509Certificate generateCertificate(PrivateKey privateKey, String subjectDN, Date notBefore, Date notAfter) throws Exception {
+        X500Name subject = new X500Name(subjectDN);
+        X500Name issuer = new X500Name("CN=Test CA,O=Test Organization,C=FR");
+        BigInteger serialNumber = BigInteger.valueOf(System.currentTimeMillis());
         
-        X509Certificate clientCert = certs[0];
+        X509v3CertificateBuilder certificateBuilder = new JcaX509v3CertificateBuilder(
+                issuer, serialNumber, notBefore, notAfter, subject, 
+                KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic());
         
-        // Validation du certificat QWAC
-        boolean isValid = certificateService.validateQWACCertificate(clientCert);
-        if (!isValid) {
-            logger.error("Invalid QWAC certificate");
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "Invalid QWAC certificate");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-        }
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(privateKey);
+        X509CertificateHolder certificateHolder = certificateBuilder.build(signer);
         
-        // Extraction du PSP ID
-        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(clientCert);
-        String pspIdValue = pspId.orElse(null);
-        
-        // Log des informations de routage
-        String targetUrl = routingService.determineTargetUrl(clientCert);
-        logger.info("Requête reçue: {} {} - PSP ID: {} - URL cible: {}", 
-            request.getMethod(), request.getRequestURI(), pspIdValue, targetUrl);
-        
-        // Générer une réponse personnalisée en fonction du PSP ID et de l'URL
-        return bankResponseService.generateResponse(pspIdValue, request.getRequestURI());
+        return new JcaX509CertificateConverter().getCertificate(certificateHolder);
     }
 }
 ```
 
-## 5. Modifier le script mock-vop.sh pour gérer le fichier de réponses
+## Améliorations apportées au code
 
-Ajoutez une fonction pour gérer le fichier de réponses personnalisées:
+1. **Refactorisation de la structure**:
+   - Séparation claire des méthodes publiques et privées
+   - Extraction des constantes et paramètres répétitifs
+   - Documentation améliorée avec JavaDoc
 
-```bash
-# Fonction pour gérer les réponses personnalisées
-manage_responses() {
-  RESPONSES_FILE="$CONF_DIR/bank-responses.yml"
-  
-  case "$1" in
-    "edit")
-      # Déterminer l'éditeur à utiliser
-      EDITOR=${EDITOR:-vi}
-      if command -v nano &> /dev/null; then
-        EDITOR="nano"
-      fi
-      
-      # Vérifier si le fichier existe, sinon créer un modèle
-      if [ ! -f "$RESPONSES_FILE" ]; then
-        echo "Création d'un fichier de réponses par défaut..."
-        cat > "$RESPONSES_FILE" << 'EOF'
-# Configuration des réponses personnalisées par banque
-responses:
-  # Réponse par défaut
-  default:
-    status: 200
-    headers:
-      Content-Type: application/json
-    body: |
-      {
-        "status": "success",
-        "message": "Réponse par défaut",
-        "timestamp": "${timestamp}"
-      }
-  
-  # Réponses spécifiques par banque (PSP ID)
-  banks:
-    # Exemple pour Natixis
-    "15930":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success",
-          "bank": "Natixis",
-          "message": "Connexion établie avec Natixis",
-          "timestamp": "${timestamp}"
-        }
-  
-  # Réponses par pattern d'URL
-  urls:
-    # Exemple pour une URL contenant "bnp"
-    "bnp":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success",
-          "bank": "BNP Paribas",
-          "message": "Connexion établie avec BNP Paribas via URL",
-          "timestamp": "${timestamp}"
-        }
-EOF
-      fi
-      
-      # Éditer le fichier
-      $EDITOR "$RESPONSES_FILE"
-      ;;
-      
-    "list")
-      # Afficher le contenu du fichier (sans les corps de réponse pour plus de lisibilité)
-      if [ -f "$RESPONSES_FILE" ]; then
-        echo "Réponses personnalisées configurées:"
-        grep -A 1 -E "banks:|urls:|default:" "$RESPONSES_FILE" | grep -v -E "body:|headers:"
-      else
-        echo "Aucun fichier de réponses personnalisées trouvé."
-      fi
-      ;;
-      
-    "reload")
-      # Redémarrer l'application pour recharger les réponses
-      if [ -f "$PID_FILE" ]; then
-        echo "Redémarrage de l'application pour recharger les réponses personnalisées..."
-        stop_app
-        sleep 2
-        start_app
-      else
-        echo "L'application n'est pas en cours d'exécution."
-      fi
-      ;;
-      
-    *)
-      echo "Action non reconnue pour les réponses personnalisées."
-      echo "Utilisez: responses edit|list|reload"
-      return 1
-      ;;
-  esac
-}
+2. **Gestion des erreurs**:
+   - Utilisation systématique d'Optional pour les valeurs qui peuvent être absentes
+   - Gestion des exceptions avec journalisation appropriée
+   - Validation plus robuste des données d'entrée
 
-# Dans le case du script principal, ajoutez:
-case "$1" in
-  # [autres cas existants]
-  "responses")
-    shift
-    manage_responses "$@"
-    ;;
-  # [autres cas existants]
-esac
-```
+3. **Performance et lisibilité**:
+   - Réduction des redondances de code
+   - Simplification de la logique de traitement des types ASN.1
+   - Noms de méthodes et variables plus descriptifs
 
-## 6. Mise à jour de application.yml
+4. **Tests unitaires**:
+   - Tests pour tous les scénarios: certificats valides, expirés, sans identifiant PSD2
+   - Utilisation de certificats de test générés avec BouncyCastle
+   - Tests de gestion des exceptions avec Mockito
+   - Tests des méthodes d'extraction d'identifiants
 
-Ajoutez la configuration pour le fichier de réponses personnalisées:
-
-```yaml
-# Dans application.yml
-mock-vop:
-  bank-responses-file: file:/opt/mock-client-vop/conf/bank-responses.yml
-  
-  # Autres configurations existantes
-  qwac:
-    validation:
-      enabled: true
-      # ...
-```
-
-## 7. Utilisation de la fonctionnalité
-
-1. **Éditer le fichier de réponses personnalisées:**
-   ```bash
-   mock-vop responses edit
-   ```
-
-2. **Lister les réponses configurées:**
-   ```bash
-   mock-vop responses list
-   ```
-
-3. **Recharger les réponses après modification:**
-   ```bash
-   mock-vop responses reload
-   ```
-
-4. **Tester une réponse personnalisée:**
-   ```bash
-   # Test avec certificat Natixis (PSP ID 15930)
-   curl -v --cert natixis-qwac.crt --key natixis-private.key \
-     --cacert natixis-ca.cert https://10.55.8.12:8443/api/status
-   
-   # Test avec URL pour BNP
-   curl -v --cert client.crt --key client.key \
-     --cacert ca.crt https://10.55.8.12:8443/api/bnp/status
-   ```
-
-Cette implémentation vous permet de:
-1. Configurer des réponses personnalisées par banque dans un fichier YAML
-2. Utiliser le PSP ID extrait du certificat pour déterminer la banque
-3. Utiliser l'URL comme méthode alternative d'identification de la banque
-4. Avoir une réponse par défaut si aucune correspondance n'est trouvée
-5. Inclure des variables dynamiques dans les réponses (timestamp, requestId)
-6. Gérer facilement les réponses via le script mock-vop.sh
-
-Le système est extensible et vous pouvez facilement ajouter de nouvelles banques ou modifier les réponses existantes sans avoir à redéployer l'application.
+Cette refactorisation rend le code plus robuste, plus facile à maintenir et à tester, tout en conservant la fonctionnalité essentielle de validation des certificats QWAC pour PSD2.
