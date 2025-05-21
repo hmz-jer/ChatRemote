@@ -1,356 +1,186 @@
- # Refactorisation du code CertificateUtils
+ # Génération de certificats QWAC au format P12 (PKCS#12) pour les clients
 
-Voici le code refactorisé pour la classe CertificateUtils, avec une meilleure gestion des erreurs, une organisation plus claire, et des méthodes plus ciblées:
+Voici les étapes détaillées pour générer des certificats QWAC au format P12 (PKCS#12), qui contiendront à la fois le certificat public et la clé privée, protégés par un mot de passe:
 
-```java
-package com.example.mockclientvop.util;
+## Étape 1: Créer une clé privée pour l'AC générique
 
-import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.asn1.ASN1Primitive;
-import org.bouncycastle.asn1.DERIA5String;
-import org.bouncycastle.asn1.DEROctetString;
-import org.bouncycastle.asn1.DERPrintableString;
-import org.bouncycastle.asn1.DERUTF8String;
-import org.bouncycastle.asn1.x500.RDN;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x500.style.BCStyle;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-/**
- * Utilitaire pour la manipulation et validation des certificats X.509,
- * spécialement pour les certificats QWAC (Qualified Website Authentication Certificate) utilisés dans PSD2.
- */
-@Component
-public class CertificateUtils {
-
-    private static final Logger logger = LoggerFactory.getLogger(CertificateUtils.class);
-    private static final String PSD2_PATTERN = "PSDFR-ACPR-(\\d+)";
-
-    /**
-     * Extrait l'identifiant d'organisation (Organization Identifier) du certificat.
-     * Cherche d'abord dans le sujet du certificat, puis dans les extensions si nécessaire.
-     *
-     * @param certificate Le certificat X.509 à analyser
-     * @return Un Optional contenant l'identifiant d'organisation si trouvé, sinon Optional.empty()
-     */
-    public Optional<String> extractOrganizationIdFromCertificate(X509Certificate certificate) {
-        try {
-            // 1. Tenter d'extraire du sujet du certificat
-            Optional<String> orgId = extractOrganizationIdFromSubject(certificate);
-            if (orgId.isPresent()) {
-                return orgId;
-            }
-
-            // 2. Si non trouvé dans le sujet, chercher dans les extensions
-            return extractOrganizationIdFromExtensions(certificate);
-        } catch (CertificateEncodingException e) {
-            logger.error("Erreur lors de l'extraction de l'identifiant d'organisation", e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Extrait l'identifiant PSP à partir de l'identifiant d'organisation en utilisant une expression régulière.
-     *
-     * @param organizationId L'identifiant d'organisation (format PSDFR-ACPR-XXXXX)
-     * @param pattern L'expression régulière pour extraire l'ID PSP (doit contenir un groupe de capture)
-     * @return Un Optional contenant l'identifiant PSP si trouvé, sinon Optional.empty()
-     */
-    public Optional<String> extractPSPIdFromOrganizationId(String organizationId, String pattern) {
-        try {
-            Pattern regex = Pattern.compile(pattern);
-            Matcher matcher = regex.matcher(organizationId);
-            
-            if (matcher.find() && matcher.groupCount() >= 1) {
-                return Optional.of(matcher.group(1));
-            }
-            
-            return Optional.empty();
-        } catch (Exception e) {
-            logger.error("Erreur lors de l'extraction de l'identifiant PSP", e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Valide un certificat QWAC en vérifiant sa période de validité et la présence
-     * d'un identifiant d'organisation au format PSD2 valide.
-     *
-     * @param certificate Le certificat QWAC à valider
-     * @return true si le certificat est valide, false sinon
-     */
-    public boolean validateQWACCertificate(X509Certificate certificate) {
-        try {
-            // 1. Vérifier la période de validité du certificat
-            certificate.checkValidity();
-            
-            // 2. Vérifier la présence de l'identifiant d'organisation
-            Optional<String> orgId = extractOrganizationIdFromCertificate(certificate);
-            if (!orgId.isPresent()) {
-                logger.warn("Identifiant d'organisation absent dans le certificat");
-                return false;
-            }
-            
-            // 3. Vérifier le format de l'identifiant d'organisation (PSDFR-ACPR-XXXXX)
-            Optional<String> pspId = extractPSPIdFromOrganizationId(orgId.get(), PSD2_PATTERN);
-            return pspId.isPresent();
-        } catch (CertificateException e) {
-            logger.error("Certificat invalide ou expiré", e);
-            return false;
-        }
-    }
-
-    /**
-     * Extrait l'identifiant d'organisation à partir du sujet du certificat.
-     *
-     * @param certificate Le certificat X.509
-     * @return Un Optional contenant l'identifiant d'organisation si trouvé dans le sujet
-     * @throws CertificateEncodingException Si le certificat ne peut pas être décodé
-     */
-    private Optional<String> extractOrganizationIdFromSubject(X509Certificate certificate) throws CertificateEncodingException {
-        X500Name x500name = new JcaX509CertificateHolder(certificate).getSubject();
-        RDN[] rdns = x500name.getRDNs(BCStyle.ORGANIZATION_IDENTIFIER);
-        
-        if (rdns.length > 0) {
-            return Optional.of(rdns[0].getFirst().getValue().toString());
-        }
-        
-        return Optional.empty();
-    }
-
-    /**
-     * Extrait l'identifiant d'organisation à partir des extensions du certificat.
-     *
-     * @param certificate Le certificat X.509
-     * @return Un Optional contenant l'identifiant d'organisation si trouvé dans les extensions
-     */
-    private Optional<String> extractOrganizationIdFromExtensions(X509Certificate certificate) {
-        byte[] extensionValue = certificate.getExtensionValue(BCStyle.ORGANIZATION_IDENTIFIER.toString());
-        if (extensionValue == null) {
-            return Optional.empty();
-        }
-
-        try (ASN1InputStream asn1Stream = new ASN1InputStream(extensionValue)) {
-            ASN1Primitive derObject = asn1Stream.readObject();
-            if (!(derObject instanceof DEROctetString)) {
-                return Optional.empty();
-            }
-            
-            byte[] octets = ((DEROctetString) derObject).getOctets();
-            try (ASN1InputStream asn1Stream2 = new ASN1InputStream(octets)) {
-                ASN1Primitive asn1Value = asn1Stream2.readObject();
-                return Optional.of(decodeASN1Value(asn1Value));
-            }
-        } catch (IOException e) {
-            logger.error("Erreur lors de la lecture des extensions du certificat", e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Décode une valeur ASN.1 en chaîne de caractères selon son type.
-     *
-     * @param asn1Value La valeur ASN.1 à décoder
-     * @return La valeur décodée en chaîne de caractères
-     */
-    private String decodeASN1Value(ASN1Primitive asn1Value) {
-        if (asn1Value instanceof DEROctetString) {
-            return new String(((DEROctetString) asn1Value).getOctets(), StandardCharsets.UTF_8);
-        } else if (asn1Value instanceof DERPrintableString) {
-            return ((DERPrintableString) asn1Value).getString();
-        } else if (asn1Value instanceof DERUTF8String) {
-            return ((DERUTF8String) asn1Value).getString();
-        } else if (asn1Value instanceof DERIA5String) {
-            return ((DERIA5String) asn1Value).getString();
-        } else {
-            // Fallback pour d'autres types d'objets ASN.1
-            return asn1Value.toString();
-        }
-    }
-}
+```bash
+openssl genrsa -out psd2-ac-root.key 4096
 ```
 
-# Tests unitaires pour CertificateUtils
+**Explication**: Génère une clé RSA de 4096 bits pour l'Autorité de Certification générique.
 
-Voici les tests unitaires pour valider le fonctionnement de la classe CertificateUtils:
+## Étape 2: Créer un certificat auto-signé pour l'AC générique
 
-```java
-package com.example.mockclientvop.util;
-
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cert.X509v3CertificateBuilder;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.PrivateKey;
-import java.security.Security;
-import java.security.cert.X509Certificate;
-import java.util.Date;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.when;
-
-class CertificateUtilsTest {
-
-    private CertificateUtils certificateUtils;
-    private static X509Certificate validCertificate;
-    private static X509Certificate expiredCertificate;
-    private static X509Certificate noPSD2Certificate;
-
-    @BeforeAll
-    static void setUpBeforeAll() throws Exception {
-        // Initialiser le fournisseur BouncyCastle
-        Security.addProvider(new BouncyCastleProvider());
-
-        // Générer une paire de clés pour les tests
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-        keyPairGenerator.initialize(2048);
-        KeyPair keyPair = keyPairGenerator.generateKeyPair();
-        PrivateKey privateKey = keyPair.getPrivate();
-
-        // Créer un certificat valide avec un identifiant d'organisation PSD2
-        validCertificate = generateCertificate(privateKey, "CN=Test,O=Test Organization,OU=Test Department,ORGANIZATIONIDENTIFIER=PSDFR-ACPR-12345", 
-                new Date(System.currentTimeMillis() - 86400000), // Hier
-                new Date(System.currentTimeMillis() + 86400000)); // Demain
-
-        // Créer un certificat expiré
-        expiredCertificate = generateCertificate(privateKey, "CN=Test,O=Test Organization,OU=Test Department,ORGANIZATIONIDENTIFIER=PSDFR-ACPR-12345", 
-                new Date(System.currentTimeMillis() - 172800000), // Avant-hier
-                new Date(System.currentTimeMillis() - 86400000)); // Hier
-
-        // Créer un certificat sans identifiant d'organisation PSD2
-        noPSD2Certificate = generateCertificate(privateKey, "CN=Test,O=Test Organization,OU=Test Department",
-                new Date(System.currentTimeMillis() - 86400000), // Hier
-                new Date(System.currentTimeMillis() + 86400000)); // Demain
-    }
-
-    @BeforeEach
-    void setUp() {
-        certificateUtils = new CertificateUtils();
-    }
-
-    @Test
-    void extractOrganizationIdFromCertificate_shouldReturnOrganizationId_whenPresent() {
-        Optional<String> result = certificateUtils.extractOrganizationIdFromCertificate(validCertificate);
-        assertTrue(result.isPresent());
-        assertEquals("PSDFR-ACPR-12345", result.get());
-    }
-
-    @Test
-    void extractOrganizationIdFromCertificate_shouldReturnEmpty_whenNotPresent() {
-        Optional<String> result = certificateUtils.extractOrganizationIdFromCertificate(noPSD2Certificate);
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void extractPSPIdFromOrganizationId_shouldReturnPSPId_whenValidFormat() {
-        Optional<String> result = certificateUtils.extractPSPIdFromOrganizationId("PSDFR-ACPR-12345", "PSDFR-ACPR-(\\d+)");
-        assertTrue(result.isPresent());
-        assertEquals("12345", result.get());
-    }
-
-    @Test
-    void extractPSPIdFromOrganizationId_shouldReturnEmpty_whenInvalidFormat() {
-        Optional<String> result = certificateUtils.extractPSPIdFromOrganizationId("INVALID-FORMAT", "PSDFR-ACPR-(\\d+)");
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void validateQWACCertificate_shouldReturnTrue_whenCertificateIsValid() {
-        boolean result = certificateUtils.validateQWACCertificate(validCertificate);
-        assertTrue(result);
-    }
-
-    @Test
-    void validateQWACCertificate_shouldReturnFalse_whenCertificateIsExpired() {
-        boolean result = certificateUtils.validateQWACCertificate(expiredCertificate);
-        assertFalse(result);
-    }
-
-    @Test
-    void validateQWACCertificate_shouldReturnFalse_whenNoPSD2Identifier() {
-        boolean result = certificateUtils.validateQWACCertificate(noPSD2Certificate);
-        assertFalse(result);
-    }
-
-    @Test
-    void validateQWACCertificate_shouldHandleExceptions() {
-        // Créer un mock de certificat qui lance une exception lors de la vérification de validité
-        X509Certificate mockCertificate = Mockito.mock(X509Certificate.class);
-        try {
-            when(mockCertificate.checkValidity()).thenThrow(new RuntimeException("Test exception"));
-            
-            boolean result = certificateUtils.validateQWACCertificate(mockCertificate);
-            assertFalse(result);
-        } catch (Exception e) {
-            fail("Exception should have been caught: " + e.getMessage());
-        }
-    }
-
-    // Méthode utilitaire pour générer des certificats de test
-    private static X509Certificate generateCertificate(PrivateKey privateKey, String subjectDN, Date notBefore, Date notAfter) throws Exception {
-        X500Name subject = new X500Name(subjectDN);
-        X500Name issuer = new X500Name("CN=Test CA,O=Test Organization,C=FR");
-        BigInteger serialNumber = BigInteger.valueOf(System.currentTimeMillis());
-        
-        X509v3CertificateBuilder certificateBuilder = new JcaX509v3CertificateBuilder(
-                issuer, serialNumber, notBefore, notAfter, subject, 
-                KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic());
-        
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(privateKey);
-        X509CertificateHolder certificateHolder = certificateBuilder.build(signer);
-        
-        return new JcaX509CertificateConverter().getCertificate(certificateHolder);
-    }
-}
+```bash
+openssl req -x509 -new -nodes -key psd2-ac-root.key -sha256 -days 3650 -out psd2-ac-root.cert \
+-subj "/C=FR/ST=Paris/L=Paris/O=PSD2 Generic Root CA/CN=PSD2 Root Certification Authority"
 ```
 
-## Améliorations apportées au code
+**Explication**: Crée un certificat auto-signé pour l'AC racine générique, valide pour 10 ans.
 
-1. **Refactorisation de la structure**:
-   - Séparation claire des méthodes publiques et privées
-   - Extraction des constantes et paramètres répétitifs
-   - Documentation améliorée avec JavaDoc
+## Étape 3: Générer une clé privée pour le client
 
-2. **Gestion des erreurs**:
-   - Utilisation systématique d'Optional pour les valeurs qui peuvent être absentes
-   - Gestion des exceptions avec journalisation appropriée
-   - Validation plus robuste des données d'entrée
+```bash
+openssl genrsa -out client.key 2048
+```
 
-3. **Performance et lisibilité**:
-   - Réduction des redondances de code
-   - Simplification de la logique de traitement des types ASN.1
-   - Noms de méthodes et variables plus descriptifs
+**Explication**: Génère une clé RSA de 2048 bits pour le client (banque).
 
-4. **Tests unitaires**:
-   - Tests pour tous les scénarios: certificats valides, expirés, sans identifiant PSD2
-   - Utilisation de certificats de test générés avec BouncyCastle
-   - Tests de gestion des exceptions avec Mockito
-   - Tests des méthodes d'extraction d'identifiants
+## Étape 4: Créer une demande de certificat (CSR) pour le client
 
-Cette refactorisation rend le code plus robuste, plus facile à maintenir et à tester, tout en conservant la fonctionnalité essentielle de validation des certificats QWAC pour PSD2.
+```bash
+openssl req -new -key client.key -out client.csr \
+-subj "/C=FR/ST=Paris/L=Paris/O=BANK NAME/OU=Payment Services/CN=api.bank.com/organizationIdentifier=PSDFR-ACPR-12345"
+```
+
+**Explication**: Crée une demande de signature de certificat (CSR) pour le client avec l'identifiant d'organisation au format PSD2. Vous devez remplacer `BANK NAME` et `PSDFR-ACPR-12345` par les informations spécifiques du client.
+
+## Étape 5: Créer un fichier d'extensions QWAC
+
+Créez un fichier `qwac.ext` avec les extensions requises pour PSD2:
+
+```
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth, serverAuth
+subjectAltName = @alt_names
+certificatePolicies = @policy_section
+qcStatements = critical, @qc_statements
+
+[ alt_names ]
+DNS.1 = api.bank.com
+DNS.2 = www.api.bank.com
+DNS.3 = localhost
+IP.1 = 127.0.0.1
+
+[ policy_section ]
+policyIdentifier = 0.4.0.19495.3.1
+userNotice.1 = @policy_notice
+
+[ policy_notice ]
+explicitText = "PSD2 Qualified Website Authentication Certificate"
+
+[ qc_statements ]
+id-etsi-psd2-qcStatement = DER:30:64:31:10:30:0E:06:03:2B:06:01:05:05:07:0C:01:01:01:01:01:FF:04:04:50:53:44:32:31:25:30:23:06:0A:2A:06:01:04:01:97:55:01:03:01:01:30:15:0C:09:50:53:44:46:52:2D:41:43:50:52:0C:08:31:32:33:34:35:31:29:30:27:06:08:2B:06:01:05:05:07:0C:02:30:1B:1E:19:68:74:74:70:73:3A:2F:2F:70:73:64:32:2E:62:61:6E:6B:2E:63:6F:6D
+```
+
+**Explication**: Ce fichier définit les extensions X.509 nécessaires pour un certificat QWAC conforme à PSD2, incluant les qcStatements requis.
+
+## Étape 6: Signer le CSR avec la clé de l'AC générique et inclure les extensions QWAC
+
+```bash
+openssl x509 -req -in client.csr -CA psd2-ac-root.cert -CAkey psd2-ac-root.key -CAcreateserial \
+-out client.crt -days 730 -sha256 -extfile qwac.ext
+```
+
+**Explication**: Signe le CSR du client avec la clé privée de l'AC générique, créant ainsi un certificat QWAC valide.
+
+## Étape 7: Créer un fichier PKCS#12 (P12) contenant le certificat et la clé privée
+
+```bash
+openssl pkcs12 -export -in client.crt -inkey client.key -certfile psd2-ac-root.cert \
+-name "client-qwac" -out client-qwac.p12 -passout pass:SecurePassword123
+```
+
+**Explication**: Cette commande crée un fichier PKCS#12 (extension .p12) qui contient:
+- Le certificat client signé (`client.crt`)
+- La clé privée associée (`client.key`)
+- Le certificat de l'AC qui l'a signé (`psd2-ac-root.cert`)
+- Le tout protégé par le mot de passe `SecurePassword123`
+
+Le paramètre `-name` définit un alias qui pourra être utilisé pour référencer ce certificat dans le fichier P12.
+
+## Étape 8: Vérifier le contenu du fichier P12
+
+```bash
+openssl pkcs12 -info -in client-qwac.p12 -noout -passin pass:SecurePassword123
+```
+
+**Explication**: Affiche les informations contenues dans le fichier P12 sans extraire les clés, pour vérifier qu'il contient bien le certificat et la clé privée.
+
+## Étape 9: Création d'un fichier P12 pour le truststore (optionnel)
+
+Si vos clients ont également besoin d'un truststore au format P12 pour valider d'autres certificats:
+
+```bash
+openssl pkcs12 -export -in psd2-ac-root.cert -name "psd2-root-ca" -nokeys \
+-out psd2-truststore.p12 -passout pass:TrustPassword123
+```
+
+**Explication**: Crée un fichier PKCS#12 contenant uniquement le certificat de l'AC racine, pour être utilisé comme truststore.
+
+## Étape 10: Distribution des certificats aux clients
+
+Pour chaque client, vous devez leur fournir:
+
+1. **Le fichier P12** (`client-qwac.p12`) contenant le certificat et la clé privée
+2. **Le mot de passe** associé au fichier P12 (`SecurePassword123` dans cet exemple)
+3. **Le certificat de l'AC racine** (`psd2-ac-root.cert`) pour qu'ils puissent valider d'autres certificats émis par cette AC
+
+## Guide d'utilisation pour les clients
+
+Voici un guide que vous pouvez fournir aux clients pour utiliser leur certificat P12:
+
+### Avec curl
+
+```bash
+curl --cert-type P12 --cert client-qwac.p12:SecurePassword123 \
+     --cacert psd2-ac-root.cert https://api.exemple.com/endpoint
+```
+
+### Avec Java
+
+```java
+// Charger le keystore P12
+KeyStore keyStore = KeyStore.getInstance("PKCS12");
+try (FileInputStream fis = new FileInputStream("client-qwac.p12")) {
+    keyStore.load(fis, "SecurePassword123".toCharArray());
+}
+
+// Configurer le SSLContext
+KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+keyManagerFactory.init(keyStore, "SecurePassword123".toCharArray());
+
+// Charger le truststore
+KeyStore trustStore = KeyStore.getInstance("PKCS12");
+try (FileInputStream fis = new FileInputStream("psd2-truststore.p12")) {
+    trustStore.load(fis, "TrustPassword123".toCharArray());
+}
+
+TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+trustManagerFactory.init(trustStore);
+
+SSLContext sslContext = SSLContext.getInstance("TLS");
+sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+
+// Utiliser ce SSLContext avec votre HttpClient
+// [code pour configurer le HttpClient avec sslContext]
+```
+
+### Avec Spring Boot (application.yml)
+
+```yaml
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:client-qwac.p12
+    key-store-password: SecurePassword123
+    key-store-type: PKCS12
+    key-alias: client-qwac
+    trust-store: classpath:psd2-truststore.p12
+    trust-store-password: TrustPassword123
+    trust-store-type: PKCS12
+    client-auth: need
+```
+
+## Points importants à communiquer aux clients
+
+1. **Sécurité du fichier P12**: Le fichier P12 contient la clé privée et doit être conservé en sécurité
+2. **Protection du mot de passe**: Le mot de passe protégeant le fichier P12 doit être gardé confidentiel
+3. **Validité du certificat**: Informez le client de la durée de validité du certificat (730 jours dans cet exemple)
+4. **Procédure de renouvellement**: Expliquez la procédure à suivre lorsque le certificat approche de sa date d'expiration
+5. **Contact en cas de compromission**: Fournissez un point de contact en cas de compromission du certificat ou de la clé privée
+
+Cette approche simplifie l'utilisation des certificats pour vos clients, car ils n'ont besoin de gérer qu'un seul fichier P12 protégé par mot de passe, plutôt que des fichiers de certificat et de clé privée séparés.
