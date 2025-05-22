@@ -1,242 +1,250 @@
- # Correction de la méthode getBankResponseByUrl
+# Infrastructure CA générique pour Mock VOP
 
-Le problème dans votre méthode `getBankResponseByUrl` est que la méthode `contains()` trouve une correspondance partielle même quand ce n'est pas exact. Par exemple, "12345" contient "1234", donc les deux retournent la même réponse.
+## Architecture des certificats
 
-Voici la correction de la méthode:
+### Pour le serveur Mock VOP :
+- **Keystore (JKS)** : Contient le certificat et la clé privée du serveur
+- **Truststore (JKS)** : Contient les CA racines pour valider les certificats clients
 
-```java
-public Map<String, Object> getBankResponseByUrl(String url) {
-    Map<String, Object> providers = getProvidersSection();
-    
-    if (url == null) {
-        return null;
-    }
-    
-    // Chercher une correspondance exacte avec les patterns d'URL
-    for (Map.Entry<String, Object> entry : providers.entrySet()) {
-        String providerPattern = entry.getKey();
-        
-        // Vérifier si l'URL correspond exactement au pattern
-        if (matchesProviderPattern(url, providerPattern)) {
-            if (entry.getValue() instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = (Map<String, Object>) entry.getValue();
-                logger.debug("Réponse trouvée pour le pattern: {} dans l'URL: {}", providerPattern, url);
-                return response;
-            }
-        }
-    }
-    
-    return null;
-}
+### Pour chaque client bancaire :
+- **Fichier P12** : Contient le certificat QWAC avec sa clé privée et publique
+- **Fichier CA (PEM)** : CA racine au format PEM pour la validation côté client
 
-/**
- * Vérifie si une URL correspond à un pattern de provider de manière exacte
- */
-private boolean matchesProviderPattern(String url, String providerPattern) {
-    // Cas 1: Pattern exact dans l'URL (par exemple "/api/provider/1234/")
-    if (url.contains("/provider/" + providerPattern + "/") || 
-        url.endsWith("/provider/" + providerPattern)) {
-        return true;
-    }
+## Script de génération générique
+
+### 1. Configuration des variables
+```bash
+#!/bin/bash
+
+# Variables globales
+CA_NAME="Generic-VOP-CA"
+CA_DAYS=3650
+CERT_DAYS=365
+COUNTRY="FR"
+STATE="Ile-de-France"
+LOCALITY="Paris"
+CA_ORG="VOP Mock CA"
+
+# Fonction pour générer les certificats d'une banque
+generate_bank_certificates() {
+    BANK_NAME=$1
+    BANK_ORG_ID=$2  # Format: PSDFR-ACPR-XXXXX
+    BANK_ORG_NAME=$3
     
-    // Cas 2: Pattern comme segment complet dans l'URL
-    String[] urlSegments = url.split("/");
-    for (String segment : urlSegments) {
-        if (segment.equals(providerPattern)) {
-            return true;
-        }
-    }
+    echo "Génération des certificats pour $BANK_NAME"
     
-    // Cas 3: Pattern avec délimiteurs pour éviter les correspondances partielles
-    // Par exemple, chercher "1234" mais pas dans "12345"
-    String regex = "\\b" + Pattern.quote(providerPattern) + "\\b";
-    Pattern pattern = Pattern.compile(regex);
-    return pattern.matcher(url).find();
+    # Création du répertoire
+    mkdir -p providers/$BANK_NAME
+    cd providers/$BANK_NAME
+    
+    # ... (suite du script ci-dessous)
 }
 ```
 
-## Alternative plus robuste avec support de patterns regex
+### 2. Création de la CA racine générique (une seule fois)
+```bash
+# Générer la clé privée de la CA
+openssl genrsa -out generic-ca.key 4096
 
-Si vous voulez une solution encore plus flexible qui supporte les expressions régulières:
+# Créer le certificat auto-signé de la CA
+openssl req -x509 -new -nodes -key generic-ca.key -sha256 -days $CA_DAYS \
+    -out generic-ca.crt \
+    -subj "/C=$COUNTRY/ST=$STATE/L=$LOCALITY/O=$CA_ORG/CN=Generic VOP Root CA"
 
-```java
-public Map<String, Object> getBankResponseByUrl(String url) {
-    Map<String, Object> providers = getProvidersSection();
-    
-    if (url == null) {
-        return null;
-    }
-    
-    logger.debug("Recherche de correspondance pour l'URL: {}", url);
-    
-    // Trier les patterns par longueur décroissante pour prioriser les correspondances les plus spécifiques
-    List<Map.Entry<String, Object>> sortedProviders = providers.entrySet().stream()
-            .sorted((e1, e2) -> Integer.compare(e2.getKey().length(), e1.getKey().length()))
-            .collect(Collectors.toList());
-    
-    for (Map.Entry<String, Object> entry : sortedProviders) {
-        String providerPattern = entry.getKey();
-        
-        if (matchesProviderPattern(url, providerPattern)) {
-            if (entry.getValue() instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = (Map<String, Object>) entry.getValue();
-                logger.debug("Réponse trouvée pour le pattern: {} dans l'URL: {}", providerPattern, url);
-                return response;
-            }
-        }
-    }
-    
-    logger.debug("Aucune correspondance trouvée pour l'URL: {}", url);
-    return null;
-}
+# Créer la CA intermédiaire PSD2 (optionnel mais recommandé)
+openssl genrsa -out psd2-intermediate-ca.key 4096
 
-/**
- * Vérifie si une URL correspond à un pattern de provider
- * Support plusieurs types de correspondances:
- * 1. Correspondance exacte dans le chemin (/api/provider/1234/)  
- * 2. Pattern regex si le pattern commence par "regex:"
- * 3. Correspondance de segment complet
- */
-private boolean matchesProviderPattern(String url, String providerPattern) {
-    try {
-        // Cas 1: Pattern regex explicite
-        if (providerPattern.startsWith("regex:")) {
-            String regex = providerPattern.substring(6); // Enlever "regex:"
-            Pattern pattern = Pattern.compile(regex);
-            boolean matches = pattern.matcher(url).find();
-            logger.debug("Test regex '{}' sur '{}': {}", regex, url, matches);
-            return matches;
-        }
-        
-        // Cas 2: Pattern exact dans le chemin provider
-        String exactPathPattern1 = "/provider/" + providerPattern + "/";
-        String exactPathPattern2 = "/provider/" + providerPattern;
-        
-        if (url.contains(exactPathPattern1) || url.endsWith(exactPathPattern2)) {
-            logger.debug("Correspondance exacte trouvée pour le pattern: {}", providerPattern);
-            return true;
-        }
-        
-        // Cas 3: Correspondance de segment complet avec délimiteurs
-        String regexPattern = "(?:^|/)provider/" + Pattern.quote(providerPattern) + "(?:/|$)";
-        Pattern pattern = Pattern.compile(regexPattern);
-        boolean matches = pattern.matcher(url).find();
-        logger.debug("Test de segment complet '{}' sur '{}': {}", regexPattern, url, matches);
-        return matches;
-        
-    } catch (Exception e) {
-        logger.error("Erreur lors de la vérification du pattern '{}' pour l'URL '{}': {}", 
-                    providerPattern, url, e.getMessage());
-        return false;
-    }
+openssl req -new -key psd2-intermediate-ca.key \
+    -out psd2-intermediate-ca.csr \
+    -subj "/C=$COUNTRY/ST=$STATE/L=$LOCALITY/O=$CA_ORG/CN=PSD2 Intermediate CA"
+
+openssl x509 -req -in psd2-intermediate-ca.csr \
+    -CA generic-ca.crt -CAkey generic-ca.key \
+    -CAcreateserial -out psd2-intermediate-ca.crt \
+    -days $CA_DAYS -sha256
+```
+
+### 3. Script de génération pour chaque banque
+```bash
+#!/bin/bash
+
+generate_qwac_certificate() {
+    BANK_CODE=$1
+    BANK_NAME=$2
+    ORG_IDENTIFIER=$3  # Ex: PSDFR-ACPR-12345
+    ORGANIZATION=$4
+    SERVER_IP=$5       # IP du serveur pour le SAN
+    
+    # Créer le répertoire de la banque
+    mkdir -p providers/$BANK_CODE
+    cd providers/$BANK_CODE
+    
+    # Générer la clé privée
+    openssl genrsa -out ${BANK_CODE}-private.key 2048
+    
+    # Créer le fichier de configuration pour les extensions QWAC
+    cat > ${BANK_CODE}-qwac.ext <<EOF
+basicConstraints = critical,CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = @alt_names
+
+# Extensions QWAC spécifiques PSD2
+1.3.6.1.4.1.311.60.2.1.3 = ASN1:PRINTABLESTRING:FR
+2.5.4.97 = ASN1:PRINTABLESTRING:$ORG_IDENTIFIER
+2.5.4.15 = ASN1:PRINTABLESTRING:Private Organization
+
+[alt_names]
+DNS.1 = ${BANK_CODE}.com
+DNS.2 = www.${BANK_CODE}.com
+DNS.3 = api.${BANK_CODE}.com
+DNS.4 = localhost
+IP.1 = 127.0.0.1
+IP.2 = $SERVER_IP
+EOF
+    
+    # Créer la CSR
+    openssl req -new -key ${BANK_CODE}-private.key \
+        -out ${BANK_CODE}.csr \
+        -subj "/C=FR/ST=Ile-de-France/L=Paris/O=$ORGANIZATION/OU=Payment Services/CN=$BANK_NAME API/serialNumber=$ORG_IDENTIFIER"
+    
+    # Signer le certificat avec la CA
+    openssl x509 -req -in ${BANK_CODE}.csr \
+        -CA ../../psd2-intermediate-ca.crt \
+        -CAkey ../../psd2-intermediate-ca.key \
+        -CAcreateserial \
+        -out ${BANK_CODE}-qwac.crt \
+        -days $CERT_DAYS \
+        -extfile ${BANK_CODE}-qwac.ext
+    
+    # Créer la chaîne complète
+    cat ${BANK_CODE}-qwac.crt ../../psd2-intermediate-ca.crt ../../generic-ca.crt > ${BANK_CODE}-chain.crt
+    
+    # Exporter en P12 pour le client
+    openssl pkcs12 -export \
+        -out ${BANK_CODE}-client.p12 \
+        -inkey ${BANK_CODE}-private.key \
+        -in ${BANK_CODE}-qwac.crt \
+        -certfile ../../psd2-intermediate-ca.crt \
+        -password pass:password
+    
+    # Créer le keystore pour le serveur (JKS)
+    keytool -importkeystore \
+        -srckeystore ${BANK_CODE}-client.p12 \
+        -srcstoretype PKCS12 \
+        -srcstorepass password \
+        -destkeystore ${BANK_CODE}-keystore.jks \
+        -deststoretype JKS \
+        -deststorepass password \
+        -noprompt
+    
+    # Exporter la CA au format PEM pour le client
+    cp ../../generic-ca.crt ${BANK_CODE}-ca.pem
+    
+    echo "Certificats générés pour $BANK_NAME dans providers/$BANK_CODE/"
+    cd ../..
 }
 ```
 
-## Configuration YAML mise à jour
+### 4. Création du truststore serveur (une seule fois)
+```bash
+# Créer le truststore qui contiendra toutes les CA
+keytool -import -file generic-ca.crt \
+    -alias generic-ca \
+    -keystore server-truststore.jks \
+    -storepass password \
+    -noprompt
 
-Voici comment vous pouvez configurer votre fichier `bank-responses.yml` pour éviter les conflits:
+keytool -import -file psd2-intermediate-ca.crt \
+    -alias psd2-ca \
+    -keystore server-truststore.jks \
+    -storepass password \
+    -noprompt
+```
+
+### 5. Script d'utilisation
+```bash
+# Exemple d'utilisation pour plusieurs banques avec IP serveur
+SERVER_IP="192.168.1.100"  # Remplacer par votre IP réelle
+
+./generate_qwac_certificate.sh "natixis" "Natixis" "PSDFR-ACPR-15930" "NATIXIS PAYMENT SOLUTIONS" "$SERVER_IP"
+./generate_qwac_certificate.sh "bnp" "BNP Paribas" "PSDFR-ACPR-14328" "BNP PARIBAS" "$SERVER_IP"
+./generate_qwac_certificate.sh "sg" "Société Générale" "PSDFR-ACPR-13807" "SOCIETE GENERALE" "$SERVER_IP"
+./generate_qwac_certificate.sh "ca" "Crédit Agricole" "PSDFR-ACPR-17449" "CREDIT AGRICOLE" "$SERVER_IP"
+```
+
+## Structure finale des fichiers
+
+```
+/mock-vop-certificates/
+├── generic-ca.crt                    # CA racine générique
+├── generic-ca.key                    # Clé privée CA (à protéger!)
+├── psd2-intermediate-ca.crt         # CA intermédiaire PSD2
+├── psd2-intermediate-ca.key         # Clé privée intermédiaire
+├── server-truststore.jks            # Truststore pour le serveur Mock VOP
+└── providers/
+    ├── natixis/
+    │   ├── natixis-private.key      # Clé privée
+    │   ├── natixis-qwac.crt         # Certificat QWAC
+    │   ├── natixis-chain.crt        # Chaîne complète
+    │   ├── natixis-client.p12       # Pour le client (Postman, etc.)
+    │   ├── natixis-keystore.jks     # Si besoin côté serveur
+    │   └── natixis-ca.pem           # CA au format PEM pour le client
+    ├── bnp/
+    │   └── ...
+    └── sg/
+        └── ...
+```
+
+## Configuration application.yml mise à jour
 
 ```yaml
-responses:
-  # Réponse par défaut
-  default:
-    status: 200
-    headers:
-      Content-Type: application/json
-    body: |
-      {
-        "status": "success",
-        "message": "Réponse par défaut",
-        "timestamp": "${timestamp}"
-      }
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:server-keystore.jks  # Keystore du serveur Mock VOP
+    key-store-password: password
+    key-store-type: JKS
+    trust-store: classpath:server-truststore.jks  # Contient les CA
+    trust-store-password: password
+    trust-store-type: JKS
+    client-auth: need  # Exige un certificat client
 
-  # Réponses par patterns d'URL - ORDRE IMPORTANT: du plus spécifique au moins spécifique
+mock-vop:
   providers:
-    # Pattern exact pour éviter les conflits (12345 ne correspond pas à 1234)
-    "12345":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success", 
-          "providerId": "12345",
-          "message": "Réponse spécifique pour le provider 12345",
-          "timestamp": "${timestamp}"
-        }
-    
-    "1234":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success",
-          "providerId": "1234", 
-          "message": "Réponse spécifique pour le provider 1234",
-          "timestamp": "${timestamp}"
-        }
-    
-    # Utilisation de regex pour des patterns plus complexes
-    "regex:provider/\\d{5}":
-      status: 200
-      headers:
-        Content-Type: application/json
-      body: |
-        {
-          "status": "success",
-          "message": "Provider avec 5 chiffres détecté",
-          "timestamp": "${timestamp}"
-        }
-        
-    # Pattern pour Natixis
-    "natixis":
-      status: 200
-      headers:
-        Content-Type: application/json
-        X-Bank: "Natixis"
-      body: |
-        {
-          "status": "success",
-          "bank": "Natixis",
-          "message": "Connexion établie avec Natixis",
-          "timestamp": "${timestamp}"
-        }
+    base-path: /providers
+    url-prefix: /api/provider
+  qwac:
+    validation:
+      organization-identifier-oid: "2.5.4.97"
+      certificate-owner-id-pattern: "PSDFR-ACPR-(\\d+)"
+  bank-responses:
+    config-file: classpath:bank-responses.yml
 ```
 
-## Test de la correction
+## Configuration client (Postman/Insomnia)
 
-Voici comment tester que la correction fonctionne:
+Pour chaque banque, configurer :
+1. **Certificate** : `providers/{bank}/{bank}-client.p12`
+2. **Password** : `password`
+3. **CA Certificate** : `providers/{bank}/{bank}-ca.pem` (pour valider le serveur)
 
-```java
-// Test unitaire pour vérifier la correction
-@Test
-public void testProviderPatternMatching() {
-    BankResponsesConfig config = new BankResponsesConfig();
-    
-    // Test avec URL contenant 1234
-    String url1 = "/api/provider/1234/status";
-    Map<String, Object> response1 = config.getBankResponseByUrl(url1);
-    // Doit retourner la réponse pour 1234
-    
-    // Test avec URL contenant 12345
-    String url2 = "/api/provider/12345/status";
-    Map<String, Object> response2 = config.getBankResponseByUrl(url2);
-    // Doit retourner la réponse pour 12345, PAS celle de 1234
-    
-    // Les réponses doivent être différentes
-    assertNotEquals(response1, response2);
-}
+## Avantages de cette approche
+
+1. **CA unique** : Une seule CA racine pour toutes les banques
+2. **Génération automatisée** : Script paramétrable pour chaque banque
+3. **Structure standardisée** : Organisation cohérente des fichiers
+4. **Sécurité** : Séparation des clés privées par banque
+5. **Flexibilité** : Facile d'ajouter de nouvelles banques
+6. **Conformité PSD2** : Extensions QWAC correctement configurées
+
+## Test avec cURL
+
+```bash
+# Test pour une banque spécifique
+curl -v --cacert providers/natixis/natixis-ca.pem \
+     --cert providers/natixis/natixis-client.p12:password \
+     --cert-type P12 \
+     https://localhost:8443/api/provider/15930/accounts
 ```
-
-## Avantages de la correction
-
-1. **Correspondance exacte**: "1234" ne correspond plus à "12345"
-2. **Priorisation**: Les patterns les plus longs sont testés en premier
-3. **Flexibilité**: Support des expressions régulières pour des patterns complexes
-4. **Logging amélioré**: Meilleur débogage des correspondances
-5. **Robustesse**: Gestion des erreurs et validation des patterns
-
-Cette correction résoudra le problème où "/api/provider/12345/" retournait la même réponse que "/api/provider/1234/".
