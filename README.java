@@ -63,11 +63,16 @@ create_directories() {
     log_info "Structure créée"
 }
 
+# Variable globale pour le répertoire de base
+BASE_DIR=$(pwd)
+
 # Générer la CA racine
 generate_root_ca() {
     log_info "Génération de la CA racine..."
     
-    cd certificates/ca
+    # Utiliser des chemins absolus
+    CA_DIR="$BASE_DIR/certificates/ca"
+    cd "$CA_DIR"
     
     # Clé privée de la CA
     openssl genrsa -out generic-ca.key 4096
@@ -81,14 +86,15 @@ generate_root_ca() {
     cp generic-ca.crt generic-ca.pem
     
     log_info "CA racine générée"
-    cd ../..
+    cd "$BASE_DIR"
 }
 
 # Générer la CA intermédiaire PSD2
 generate_intermediate_ca() {
     log_info "Génération de la CA intermédiaire PSD2..."
     
-    cd certificates/ca
+    CA_DIR="$BASE_DIR/certificates/ca"
+    cd "$CA_DIR"
     
     # Clé privée de la CA intermédiaire
     openssl genrsa -out psd2-intermediate-ca.key 4096
@@ -109,14 +115,16 @@ generate_intermediate_ca() {
     cat psd2-intermediate-ca.crt generic-ca.crt > ca-chain.pem
     
     log_info "CA intermédiaire PSD2 générée"
-    cd ../..
+    cd "$BASE_DIR"
 }
 
 # Générer le certificat du serveur Mock VOP
 generate_server_certificate() {
     log_info "Génération du certificat serveur..."
     
-    cd certificates/server
+    SERVER_DIR="$BASE_DIR/certificates/server"
+    CA_DIR="$BASE_DIR/certificates/ca"
+    cd "$SERVER_DIR"
     
     # Clé privée du serveur
     openssl genrsa -out server.key 2048
@@ -143,8 +151,8 @@ EOF
     
     # Signer le certificat serveur
     openssl x509 -req -in server.csr \
-        -CA ../ca/psd2-intermediate-ca.crt \
-        -CAkey ../ca/psd2-intermediate-ca.key \
+        -CA "$CA_DIR/psd2-intermediate-ca.crt" \
+        -CAkey "$CA_DIR/psd2-intermediate-ca.key" \
         -CAcreateserial \
         -out server.crt \
         -days $CERT_DAYS \
@@ -155,7 +163,7 @@ EOF
         -out server.p12 \
         -inkey server.key \
         -in server.crt \
-        -certfile ../ca/ca-chain.pem \
+        -certfile "$CA_DIR/ca-chain.pem" \
         -password pass:$SERVER_KEYSTORE_PASSWORD \
         -name "server"
     
@@ -169,31 +177,33 @@ EOF
         -noprompt
     
     log_info "Certificat serveur généré"
-    cd ../..
+    cd "$BASE_DIR"
 }
 
 # Créer le truststore pour le serveur
 create_server_truststore() {
     log_info "Création du truststore serveur..."
     
-    cd certificates/server
+    SERVER_DIR="$BASE_DIR/certificates/server"
+    CA_DIR="$BASE_DIR/certificates/ca"
+    cd "$SERVER_DIR"
     
     # Importer la CA racine
-    keytool -import -file ../ca/generic-ca.crt \
+    keytool -import -file "$CA_DIR/generic-ca.crt" \
         -alias generic-ca \
         -keystore server-truststore.jks \
         -storepass $TRUSTSTORE_PASSWORD \
         -noprompt
     
     # Importer la CA intermédiaire
-    keytool -import -file ../ca/psd2-intermediate-ca.crt \
+    keytool -import -file "$CA_DIR/psd2-intermediate-ca.crt" \
         -alias psd2-ca \
         -keystore server-truststore.jks \
         -storepass $TRUSTSTORE_PASSWORD \
         -noprompt
     
     log_info "Truststore serveur créé"
-    cd ../..
+    cd "$BASE_DIR"
 }
 
 # Fonction pour générer un certificat QWAC pour une banque
@@ -207,8 +217,10 @@ generate_bank_qwac() {
     log_info "Génération du certificat QWAC pour $BANK_NAME..."
     
     # Créer le répertoire de la banque
-    mkdir -p certificates/providers/$BANK_CODE
-    cd certificates/providers/$BANK_CODE
+    BANK_DIR="$BASE_DIR/certificates/providers/$BANK_CODE"
+    CA_DIR="$BASE_DIR/certificates/ca"
+    mkdir -p "$BANK_DIR"
+    cd "$BANK_DIR"
     
     # Clé privée
     openssl genrsa -out ${BANK_CODE}-private.key 2048
@@ -241,27 +253,27 @@ EOF
     
     # Signer le certificat
     openssl x509 -req -in ${BANK_CODE}.csr \
-        -CA ../../../ca/psd2-intermediate-ca.crt \
-        -CAkey ../../../ca/psd2-intermediate-ca.key \
+        -CA "$CA_DIR/psd2-intermediate-ca.crt" \
+        -CAkey "$CA_DIR/psd2-intermediate-ca.key" \
         -CAcreateserial \
         -out ${BANK_CODE}-qwac.crt \
         -days $CERT_DAYS \
         -extfile ${BANK_CODE}-qwac.ext
     
     # Créer la chaîne complète
-    cat ${BANK_CODE}-qwac.crt ../../../ca/psd2-intermediate-ca.crt ../../../ca/generic-ca.crt > ${BANK_CODE}-chain.crt
+    cat ${BANK_CODE}-qwac.crt "$CA_DIR/psd2-intermediate-ca.crt" "$CA_DIR/generic-ca.crt" > ${BANK_CODE}-chain.crt
     
     # Exporter en P12 pour le client
     openssl pkcs12 -export \
         -out ${BANK_CODE}-client.p12 \
         -inkey ${BANK_CODE}-private.key \
         -in ${BANK_CODE}-qwac.crt \
-        -certfile ../../../ca/ca-chain.pem \
+        -certfile "$CA_DIR/ca-chain.pem" \
         -password pass:password \
         -name "${BANK_CODE}"
     
     # Copier la CA au format PEM pour le client
-    cp ../../../ca/generic-ca.pem ${BANK_CODE}-ca.pem
+    cp "$CA_DIR/generic-ca.pem" ${BANK_CODE}-ca.pem
     
     # Créer un fichier README pour cette banque
     cat > README.md <<EOF
@@ -288,7 +300,7 @@ curl -v --cacert ${BANK_CODE}-ca.pem \\
 EOF
     
     log_info "Certificat QWAC généré pour $BANK_NAME"
-    cd ../../..
+    cd "$BASE_DIR"
 }
 
 # Menu principal
@@ -376,7 +388,16 @@ add_to_yaml_config() {
     local BANK_CODE=$1
     local PSP_ID=$2
     
-    cat >> certificates/bank-responses-template.yml <<EOF
+    YAML_FILE="$BASE_DIR/certificates/bank-responses-template.yml"
+    
+    # Créer le fichier s'il n'existe pas
+    if [ ! -f "$YAML_FILE" ]; then
+        cat > "$YAML_FILE" <<EOF
+bank-responses:
+EOF
+    fi
+    
+    cat >> "$YAML_FILE" <<EOF
 
   $BANK_CODE:
     psp-id: "$PSP_ID"
@@ -434,7 +455,8 @@ list_banks() {
 
 # Créer un fichier de résumé
 create_summary() {
-    cat > certificates/DEPLOYMENT.md <<EOF
+    SUMMARY_FILE="$BASE_DIR/certificates/DEPLOYMENT.md"
+    cat > "$SUMMARY_FILE" <<EOF
 # Guide de déploiement Mock VOP
 
 ## Fichiers pour le serveur Mock VOP
