@@ -1,249 +1,175 @@
- package com.stel.mockclientvop.service;
+  # Mock-Client-VOP
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.ResponseEntity;
+Mock-Client-VOP est une application Spring Boot qui simule un PSP externe pour valider les certificats QWAC (Qualified Website Authentication Certificate) dans le cadre de PSD2.
 
-import java.util.HashMap;
-import java.util.Map;
+## Fonctionnalités
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+- 🔐 Validation des certificats QWAC avec authentification mTLS
+- 🏦 Gestion des certificats par banque (`/provider/NomDeLaBanque/`)
+- 📝 Réponses personnalisées configurables en YAML
+- ⚙️ Rechargement à chaud des configurations
+- 🔍 API d'administration intégrée
 
-@ExtendWith(MockitoExtension.class)
-class BankResponseServiceTest {
+## Installation rapide
 
-    @Mock
-    private BankResponsesConfig responsesConfig;
+```bash
+# Structure des répertoires
+mkdir -p /opt/mock-client-vop/{bin,conf,logs,certs,lib}
+mkdir -p /provider/{Natixis,BNP,SocieteGenerale}
 
-    @InjectMocks
-    private BankResponseService bankResponseService;
+# Copier les fichiers
+cp target/mock-client-vop-1.0.0.jar /opt/mock-client-vop/lib/
+cp scripts/mock-vop.sh /opt/mock-client-vop/bin/
+cp src/main/resources/application.yml /opt/mock-client-vop/conf/
+```
 
-    private Map<String, Object> mockResponseConfig;
-    private Map<String, String> mockHeaders;
+## Configuration
 
-    @BeforeEach
-    void setUp() {
-        // Configuration de réponse mock
-        mockResponseConfig = new HashMap<>();
-        mockResponseConfig.put("status", 200);
-        mockResponseConfig.put("body", "{\"message\":\"success\"}");
-        
-        mockHeaders = new HashMap<>();
-        mockHeaders.put("Content-Type", "application/json");
-        mockHeaders.put("Authorization", "Bearer token123");
-        
-        mockResponseConfig.put("headers", mockHeaders);
-    }
+### application.yml
+```yaml
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    client-auth: need
 
-    @Test
-    void testGenerateResponse_WithValidRequestUrl_ShouldReturnConfiguredResponse() {
-        // Given
-        String orgId = "TEST_ORG";
-        String requestUrl = "https://api.example.com/users";
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl))
-            .thenReturn(mockResponseConfig);
+mock-vop:
+  providers:
+    base-path: /provider
+    url-prefix: provider
+  qwac:
+    validation:
+      enabled: true
+      psd2-extensions-validation: true
+```
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+### bank-responses.yml
+```yaml
+responses:
+  default:
+    status: 200
+    body: |
+      {"status": "success", "message": "Défaut"}
+  
+  providers:
+    "15930":  # Natixis PSP ID
+      status: 200
+      body: |
+        {"status": "success", "bank": "Natixis", "pspId": "PSDFR-ACPR-15930"}
+```
 
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        assertEquals("{\"message\":\"success\"}", result.getBody());
-        
-        // Vérifier les headers
-        assertTrue(result.getHeaders().containsKey("Content-Type"));
-        assertEquals("application/json", result.getHeaders().getFirst("Content-Type"));
-        assertTrue(result.getHeaders().containsKey("Authorization"));
-        assertEquals("Bearer token123", result.getHeaders().getFirst("Authorization"));
-        
-        // Vérifier l'appel au mock
-        verify(responsesConfig).getBankResponseByUrl(requestUrl);
-    }
+## Génération des certificats
 
-    @Test
-    void testGenerateResponse_WithNullRequestUrl_ShouldReturnDefaultResponse() {
-        // Given
-        String orgId = "TEST_ORG";
-        String requestUrl = null;
-        
-        Map<String, Object> defaultResponse = new HashMap<>();
-        defaultResponse.put("status", 200);
-        defaultResponse.put("body", "{}");
-        defaultResponse.put("headers", new HashMap<>());
-        
-        when(responsesConfig.getDefaultResponse()).thenReturn(defaultResponse);
+### Script generate_certs.sh
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+Le script `generate_certs.sh` automatise la création de certificats QWAC conformes PSD2:
 
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        assertEquals("{}", result.getBody());
-        
-        verify(responsesConfig, never()).getBankResponseByUrl(any());
-        verify(responsesConfig).getDefaultResponse();
-    }
+```bash
+# Créer l'AC racine (une fois)
+./scripts/generate_certs.sh --create-ca-only
 
-    @Test
-    void testGenerateResponse_WithNoMatchingConfig_ShouldReturnDefaultResponse() {
-        // Given
-        String orgId = "TEST_ORG";
-        String requestUrl = "https://unknown.api.com/endpoint";
-        
-        Map<String, Object> defaultResponse = new HashMap<>();
-        defaultResponse.put("status", 404);
-        defaultResponse.put("body", "{\"error\":\"Not found\"}");
-        defaultResponse.put("headers", new HashMap<>());
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl)).thenReturn(null);
-        when(responsesConfig.getDefaultResponse()).thenReturn(defaultResponse);
+# Générer certificat pour une banque
+./scripts/generate_certs.sh \
+  --bank "Natixis" \
+  --psp-id "15930" \
+  --domain "api.natixis.com" \
+  --password "NatixisPass123"
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+# Copier vers le provider
+cp certificates/Natixis/natixis-qwac.p12 /provider/Natixis/
+cp certificates/psd2-ac-root.cert.pem /provider/
+```
 
-        // Then
-        assertNotNull(result);
-        assertEquals(404, result.getStatusCodeValue());
-        assertEquals("{\"error\":\"Not found\"}", result.getBody());
-        
-        verify(responsesConfig).getBankResponseByUrl(requestUrl);
-        verify(responsesConfig).getDefaultResponse();
-    }
+**Paramètres principaux:**
+- `--bank`: Nom de la banque
+- `--psp-id`: ID PSP (PSDFR-ACPR-XXXXX)
+- `--domain`: Domaine API
+- `--password`: Mot de passe P12
 
-    @Test
-    void testGenerateResponse_WithVariableReplacement_ShouldReplaceCorrectly() {
-        // Given
-        String orgId = "BANK123";
-        String requestUrl = "https://api.example.com/accounts";
-        
-        Map<String, Object> responseWithVariables = new HashMap<>();
-        responseWithVariables.put("status", 200);
-        responseWithVariables.put("body", "{\"orgId\":\"${orgId}\",\"requestId\":\"${requestId}\"}");
-        responseWithVariables.put("headers", new HashMap<>());
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl))
-            .thenReturn(responseWithVariables);
+## Utilisation
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+### Démarrage
+```bash
+# Démarrer
+./bin/mock-vop.sh start
 
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        
-        String responseBody = result.getBody();
-        assertTrue(responseBody.contains("\"orgId\":\"BANK123\""));
-        assertTrue(responseBody.contains("\"requestId\":"));
-        assertFalse(responseBody.contains("${orgId}"));
-        assertFalse(responseBody.contains("${requestId}"));
-    }
+# Vérifier le statut
+./bin/mock-vop.sh status
 
-    @Test
-    void testGenerateResponse_WithDifferentStatusCodes() {
-        // Test pour status 201
-        testStatusCode(201, "Created");
-        
-        // Test pour status 400
-        testStatusCode(400, "Bad Request");
-        
-        // Test pour status 500
-        testStatusCode(500, "Internal Server Error");
-    }
+# Voir les logs
+./bin/mock-vop.sh logs 50
+```
 
-    private void testStatusCode(int statusCode, String message) {
-        // Given
-        String orgId = "TEST_ORG";
-        String requestUrl = "https://api.example.com/test";
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", statusCode);
-        response.put("body", "{\"message\":\"" + message + "\"}");
-        response.put("headers", new HashMap<>());
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl)).thenReturn(response);
+### API
+- `GET /api/status` - Validation certificat + réponse personnalisée
+- `POST /api/admin/providers/reload` - Recharger certificats
+- `GET /api/admin/providers/list` - Liste des providers
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+## Tests avec certificats
 
-        // Then
-        assertEquals(statusCode, result.getStatusCodeValue());
-        assertTrue(result.getBody().contains(message));
-        
-        // Reset mock pour le prochain test
-        reset(responsesConfig);
-    }
+### Exemple avec Natixis (PSP ID: 15930)
 
-    @Test
-    void testGenerateResponse_WithEmptyHeaders_ShouldNotFailAndAddDefaultHeaders() {
-        // Given
-        String orgId = "TEST_ORG";
-        String requestUrl = "https://api.example.com/test";
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", 200);
-        response.put("body", "{}");
-        response.put("headers", new HashMap<>()); // Headers vides
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl)).thenReturn(response);
+```bash
+# Test validation certificat + réponse personnalisée
+curl -v \
+  --cert-type P12 \
+  --cert /provider/Natixis/natixis-qwac.p12:NatixisPass123 \
+  --cacert /provider/psd2-ac-root.cert.pem \
+  https://10.55.8.12:8443/api/status
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+# Test via URL pattern
+curl -v \
+  --cert-type P12 \
+  --cert /provider/Natixis/natixis-qwac.p12:NatixisPass123 \
+  --cacert /provider/psd2-ac-root.cert.pem \
+  https://10.55.8.12:8443/api/provider/15930/accounts
 
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        assertEquals("{}", result.getBody());
-        
-        // Vérifier qu'il n'y a pas d'erreur même avec des headers vides
-        assertNotNull(result.getHeaders());
-    }
+# Réponse attendue:
+# {
+#   "status": "success",
+#   "bank": "Natixis",
+#   "pspId": "PSDFR-ACPR-15930",
+#   "message": "Connexion établie avec Natixis",
+#   "timestamp": "2024-01-15T10:30:00"
+# }
+```
 
-    @Test
-    void testGenerateResponse_WithNullOrgId_ShouldHandleGracefully() {
-        // Given
-        String orgId = null;
-        String requestUrl = "https://api.example.com/test";
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl))
-            .thenReturn(mockResponseConfig);
+### Test sans certificat (doit échouer)
+```bash
+curl -k https://10.55.8.12:8443/api/status
+# Erreur: No client certificate provided
+```
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+### Test avec certificat invalide
+```bash
+curl -v \
+  --cert invalid-cert.crt \
+  --key invalid-key.key \
+  --cacert /provider/psd2-ac-root.cert.pem \
+  https://10.55.8.12:8443/api/status
+# Erreur: Invalid QWAC certificate
+```
 
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        
-        // Vérifier que "unknown" est utilisé à la place de null
-        String body = result.getBody();
-        assertTrue(body.contains("unknown") || !body.contains("null"));
-    }
+## Structure des providers
 
-    @Test
-    void testGenerateResponse_LoggingBehavior() {
-        // Given
-        String orgId = "TEST_ORG";
-        String requestUrl = "https://api.example.com/test";
-        
-        when(responsesConfig.getBankResponseByUrl(requestUrl))
-            .thenReturn(mockResponseConfig);
+```
+/provider/
+├── Natixis/
+│   ├── natixis-qwac.p12      # Certificat client P12
+│   └── natixis-ca.cert.pem   # Certificat AC (optionnel)
+├── BNP/
+│   ├── bnp-qwac.p12
+│   └── password.txt          # Mot de passe P12
+└── psd2-ac-root.cert.pem     # AC racine commune
+```
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, requestUrl);
+## Technologies
 
-        // Then
-        assertNotNull(result);
-        verify(responsesConfig).getBankResponseByUrl(requestUrl);
-        
-        // Note: Pour tester les logs, vous pourriez utiliser un appender de test
-        // ou vérifier que les méthodes du logger sont appelées avec les bons paramètres
-    }
-}
+- **Spring Boot 2.7+** - Framework principal
+- **Spring Security** - Authentification mTLS
+- **OpenSSL** - Génération certificats
+- **BouncyCastle** - Manipulation certificats X.509
+
+## Licence
+
+MIT License
