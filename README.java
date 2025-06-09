@@ -65,7 +65,7 @@ public class SchemaFlattenerService {
             if (objectNode.has("$ref")) {
                 String ref = objectNode.get("$ref").asText();
                 
-                // Ne traiter que les références locales (pas HTTP ni internes)
+                // Ne traiter que les références locales (pas HTTP ni internes pures)
                 if (isLocalFileReference(ref)) {
                     // Éviter les références circulaires
                     if (processedRefs.contains(ref)) {
@@ -75,10 +75,18 @@ public class SchemaFlattenerService {
                     processedRefs.add(ref);
                     
                     // Résoudre la référence
-                    String resolvedPath = resolvePath(basePath, ref);
+                    String filePath = ref.contains("#") ? ref.substring(0, ref.indexOf("#")) : ref;
+                    String fragment = ref.contains("#") ? ref.substring(ref.indexOf("#") + 1) : null;
+                    
+                    String resolvedPath = resolvePath(basePath, filePath);
                     JsonNode referencedSchema = loadSchema(resolvedPath);
                     
-                    // Récursivement aplir le schéma référencé
+                    // Résoudre le fragment JSON Pointer si présent
+                    if (fragment != null && !fragment.isEmpty()) {
+                        referencedSchema = resolveJsonPointer(referencedSchema, fragment);
+                    }
+                    
+                    // Récursivement aplatir le schéma référencé
                     JsonNode flattenedRef = flattenSchema(referencedSchema, getBasePath(resolvedPath), new HashSet<>(processedRefs));
                     
                     processedRefs.remove(ref);
@@ -108,50 +116,91 @@ public class SchemaFlattenerService {
         return node;
     }
 
+    private JsonNode resolveJsonPointer(JsonNode root, String pointer) {
+        if (pointer == null || pointer.isEmpty()) {
+            return root;
+        }
+        
+        // Enlever le premier '/' si présent
+        if (pointer.startsWith("/")) {
+            pointer = pointer.substring(1);
+        }
+        
+        JsonNode current = root;
+        String[] parts = pointer.split("/");
+        
+        for (String part : parts) {
+            if (current == null) {
+                throw new RuntimeException("Fragment JSON Pointer non trouvé: " + pointer);
+            }
+            
+            // Décoder les caractères échappés dans JSON Pointer
+            part = part.replace("~1", "/").replace("~0", "~");
+            
+            if (current.isObject()) {
+                current = current.get(part);
+            } else if (current.isArray()) {
+                try {
+                    int index = Integer.parseInt(part);
+                    current = current.get(index);
+                } catch (NumberFormatException e) {
+                    throw new RuntimeException("Index de tableau invalide dans JSON Pointer: " + part);
+                }
+            } else {
+                throw new RuntimeException("Impossible de naviguer dans le JSON Pointer: " + pointer);
+            }
+        }
+        
+        if (current == null) {
+            throw new RuntimeException("Fragment JSON Pointer non trouvé: " + pointer);
+        }
+        
+        return current;
+    }
+
     private boolean isLocalFileReference(String ref) {
         return ref != null && 
                !ref.startsWith("http://") && 
                !ref.startsWith("https://") && 
-               !ref.startsWith("#");
+               !ref.startsWith("#") &&
+               (ref.contains(".json") || ref.contains(".schema"));
     }
 
     private String resolvePath(String basePath, String ref) {
-        // Supprimer la partie fragment (#/...) si présente
+        // Extraire la partie fichier si il y a un fragment JSON Pointer
+        String filePath = ref;
         if (ref.contains("#")) {
-            ref = ref.substring(0, ref.indexOf("#"));
+            filePath = ref.substring(0, ref.indexOf("#"));
         }
         
-        // Traiter les chemins relatifs
-        if (ref.startsWith("./")) {
-            ref = ref.substring(2);
-        } else if (ref.startsWith("../")) {
-            // Remonter d'un niveau dans le basePath
-            String[] basePathParts = basePath.split("/");
-            StringBuilder newBasePath = new StringBuilder();
-            
-            int levelsUp = 0;
-            String tempRef = ref;
-            while (tempRef.startsWith("../")) {
-                levelsUp++;
-                tempRef = tempRef.substring(3);
-            }
-            
-            // Reconstruire le chemin de base en remontant
-            for (int i = 0; i < basePathParts.length - levelsUp - 1; i++) {
-                if (!basePathParts[i].isEmpty()) {
-                    newBasePath.append(basePathParts[i]).append("/");
-                }
-            }
-            
-            ref = tempRef;
-            basePath = newBasePath.toString();
+        // Normaliser le chemin de référence
+        if (filePath.startsWith("./")) {
+            filePath = filePath.substring(2);
         }
         
-        // Combiner le chemin de base avec la référence
-        if (basePath.endsWith("/")) {
-            return basePath + ref;
+        // Gérer les chemins qui remontent avec ../
+        String resolvedPath = basePath;
+        while (filePath.startsWith("../")) {
+            filePath = filePath.substring(3);
+            // Remonter d'un niveau dans le chemin de base
+            if (resolvedPath.endsWith("/")) {
+                resolvedPath = resolvedPath.substring(0, resolvedPath.length() - 1);
+            }
+            int lastSlash = resolvedPath.lastIndexOf('/');
+            if (lastSlash > 0) {
+                resolvedPath = resolvedPath.substring(0, lastSlash + 1);
+            } else {
+                resolvedPath = "";
+            }
+        }
+        
+        // Combiner le chemin résolu avec la référence
+        if (resolvedPath.isEmpty()) {
+            return "schemas/" + filePath;
+        } else if (resolvedPath.endsWith("/")) {
+            return resolvedPath + filePath;
         } else {
-            return basePath.isEmpty() ? ref : basePath + "/" + ref;
+            return resolvedPath + "/" + filePath;
         }
     }
 
