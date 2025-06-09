@@ -4,6 +4,7 @@ import com.example.jsonschemaflattener.util.JsonSchemaValidator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -22,26 +23,45 @@ public class SchemaFlattenerService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final JsonSchemaValidator validator = new JsonSchemaValidator();
 
+    @Value("${schema.input.default-file}")
+    private String defaultInputFile;
+
+    @Value("${schema.input.base-path}")
+    private String inputBasePath;
+
+    @Value("${schema.output.default-file}")
+    private String defaultOutputFile;
+
+    @Value("${schema.output.base-path}")
+    private String outputBasePath;
+
     public void flattenAndValidateSchema() throws Exception {
+        flattenAndValidateSchema(defaultInputFile, defaultOutputFile);
+    }
+
+    public void flattenAndValidateSchema(String inputSchemaFile, String outputFileName) throws Exception {
         // 1. Charger le schéma principal
-        JsonNode schema = loadSchema("schemas/schema.json");
+        String inputPath = inputBasePath + "/" + inputSchemaFile;
+        JsonNode schema = loadSchema(inputPath);
         
         // 2. Résoudre toutes les références $ref (avec le schéma racine pour les références internes)
-        JsonNode flattenedSchema = flattenSchema(schema, "schemas/", new HashSet<>(), schema);
+        JsonNode flattenedSchema = flattenSchema(schema, inputBasePath + "/", new HashSet<>(), schema);
         
         // 3. Créer le dossier output s'il n'existe pas
-        Path outputDir = Paths.get("output");
+        Path outputDir = Paths.get(outputBasePath);
         if (!Files.exists(outputDir)) {
             Files.createDirectories(outputDir);
         }
         
         // 4. Écrire le schéma aplati
-        Path outputFile = outputDir.resolve("schema-resolu.json");
+        Path outputFile = outputDir.resolve(outputFileName);
         objectMapper.writerWithDefaultPrettyPrinter()
                 .writeValue(outputFile.toFile(), flattenedSchema);
         
         // 5. Valider le schéma généré
         validator.validateSchema(flattenedSchema);
+        
+        System.out.println("Schéma aplati généré: " + outputFile.toAbsolutePath());
     }
 
     private JsonNode loadSchema(String path) throws IOException {
@@ -67,6 +87,9 @@ public class SchemaFlattenerService {
             if (objectNode.has("$ref")) {
                 String ref = objectNode.get("$ref").asText();
                 
+                // Nettoyer la référence des caractères indésirables
+                ref = cleanString(ref);
+                
                 // Ne traiter que les références locales
                 if (isLocalFileReference(ref)) {
                     // Éviter les références circulaires
@@ -90,6 +113,11 @@ public class SchemaFlattenerService {
                         // Gérer les références de fichiers externes
                         String filePath = ref.contains("#") ? ref.substring(0, ref.indexOf("#")) : ref;
                         String fragment = ref.contains("#") ? ref.substring(ref.indexOf("#") + 1) : null;
+                        
+                        // Nettoyer le fragment s'il existe
+                        if (fragment != null) {
+                            fragment = cleanString(fragment);
+                        }
                         
                         String resolvedPath = resolvePath(basePath, filePath);
                         JsonNode externalSchema = loadSchema(resolvedPath);
@@ -141,6 +169,9 @@ public class SchemaFlattenerService {
             return root;
         }
         
+        // Nettoyer le pointeur
+        pointer = cleanString(pointer);
+        
         // Enlever le premier '/' si présent
         if (pointer.startsWith("/")) {
             pointer = pointer.substring(1);
@@ -154,8 +185,8 @@ public class SchemaFlattenerService {
                 throw new RuntimeException("Fragment JSON Pointer non trouvé: " + pointer);
             }
             
-            // Décoder les caractères échappés dans JSON Pointer
-            part = part.replace("~1", "/").replace("~0", "~");
+            // Nettoyer chaque partie et décoder les caractères échappés dans JSON Pointer
+            part = cleanString(part).replace("~1", "/").replace("~0", "~");
             
             if (current.isObject()) {
                 current = current.get(part);
@@ -192,13 +223,16 @@ public class SchemaFlattenerService {
             filePath = ref.substring(0, ref.indexOf("#"));
         }
         
+        // Nettoyer les caractères indésirables
+        filePath = cleanString(filePath);
+        
         // Normaliser le chemin de référence
         if (filePath.startsWith("./")) {
             filePath = filePath.substring(2);
         }
         
         // Gérer les chemins qui remontent avec ../
-        String resolvedPath = basePath;
+        String resolvedPath = cleanString(basePath);
         while (filePath.startsWith("../")) {
             filePath = filePath.substring(3);
             // Remonter d'un niveau dans le chemin de base
@@ -214,20 +248,35 @@ public class SchemaFlattenerService {
         }
         
         // Combiner le chemin résolu avec la référence
+        String finalPath;
         if (resolvedPath.isEmpty()) {
-            return "schemas/" + filePath;
+            finalPath = inputBasePath + "/" + filePath;
         } else if (resolvedPath.endsWith("/")) {
-            return resolvedPath + filePath;
+            finalPath = resolvedPath + filePath;
         } else {
-            return resolvedPath + "/" + filePath;
+            finalPath = resolvedPath + "/" + filePath;
         }
+        
+        // Nettoyer le chemin final
+        return cleanString(finalPath);
     }
 
     private String getBasePath(String fullPath) {
+        // Nettoyer le chemin complet
+        fullPath = cleanString(fullPath);
+        
         int lastSlashIndex = fullPath.lastIndexOf('/');
         if (lastSlashIndex > 0) {
             return fullPath.substring(0, lastSlashIndex + 1);
         }
         return "";
+    }
+
+    private String cleanString(String input) {
+        if (input == null) {
+            return "";
+        }
+        // Supprimer les caractères de contrôle indésirables
+        return input.trim().replaceAll("[\r\n\t\u0000-\u001F\u007F]", "");
     }
 }
