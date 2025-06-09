@@ -26,8 +26,8 @@ public class SchemaFlattenerService {
         // 1. Charger le schéma principal
         JsonNode schema = loadSchema("schemas/schema.json");
         
-        // 2. Résoudre toutes les références $ref
-        JsonNode flattenedSchema = flattenSchema(schema, "schemas/");
+        // 2. Résoudre toutes les références $ref (avec le schéma racine pour les références internes)
+        JsonNode flattenedSchema = flattenSchema(schema, "schemas/", new HashSet<>(), schema);
         
         // 3. Créer le dossier output s'il n'existe pas
         Path outputDir = Paths.get("output");
@@ -49,11 +49,13 @@ public class SchemaFlattenerService {
         return objectMapper.readTree(resource.getInputStream());
     }
 
-    private JsonNode flattenSchema(JsonNode node, String basePath) throws IOException {
-        return flattenSchema(node, basePath, new HashSet<>());
-    }
+
 
     private JsonNode flattenSchema(JsonNode node, String basePath, Set<String> processedRefs) throws IOException {
+        return flattenSchema(node, basePath, processedRefs, null);
+    }
+
+    private JsonNode flattenSchema(JsonNode node, String basePath, Set<String> processedRefs, JsonNode rootSchema) throws IOException {
         if (node == null) {
             return node;
         }
@@ -65,7 +67,7 @@ public class SchemaFlattenerService {
             if (objectNode.has("$ref")) {
                 String ref = objectNode.get("$ref").asText();
                 
-                // Ne traiter que les références locales (pas HTTP ni internes pures)
+                // Ne traiter que les références locales
                 if (isLocalFileReference(ref)) {
                     // Éviter les références circulaires
                     if (processedRefs.contains(ref)) {
@@ -73,21 +75,39 @@ public class SchemaFlattenerService {
                     }
                     
                     processedRefs.add(ref);
+                    JsonNode referencedSchema;
+                    JsonNode recursiveRootSchema = rootSchema;
+                    String newBasePath = basePath;
                     
-                    // Résoudre la référence
-                    String filePath = ref.contains("#") ? ref.substring(0, ref.indexOf("#")) : ref;
-                    String fragment = ref.contains("#") ? ref.substring(ref.indexOf("#") + 1) : null;
-                    
-                    String resolvedPath = resolvePath(basePath, filePath);
-                    JsonNode referencedSchema = loadSchema(resolvedPath);
-                    
-                    // Résoudre le fragment JSON Pointer si présent
-                    if (fragment != null && !fragment.isEmpty()) {
-                        referencedSchema = resolveJsonPointer(referencedSchema, fragment);
+                    // Gérer les références internes (#/$defs/...)
+                    if (ref.startsWith("#/$defs/")) {
+                        if (rootSchema == null) {
+                            throw new RuntimeException("Impossible de résoudre une référence interne sans schéma racine: " + ref);
+                        }
+                        // Résoudre dans le schéma racine
+                        referencedSchema = resolveJsonPointer(rootSchema, ref.substring(1)); // enlever le #
+                    } else {
+                        // Gérer les références de fichiers externes
+                        String filePath = ref.contains("#") ? ref.substring(0, ref.indexOf("#")) : ref;
+                        String fragment = ref.contains("#") ? ref.substring(ref.indexOf("#") + 1) : null;
+                        
+                        String resolvedPath = resolvePath(basePath, filePath);
+                        JsonNode externalSchema = loadSchema(resolvedPath);
+                        
+                        // Résoudre le fragment JSON Pointer si présent
+                        if (fragment != null && !fragment.isEmpty()) {
+                            referencedSchema = resolveJsonPointer(externalSchema, fragment);
+                        } else {
+                            referencedSchema = externalSchema;
+                        }
+                        
+                        // Pour les fichiers externes, utiliser le nouveau schéma comme racine pour ses propres références internes
+                        recursiveRootSchema = externalSchema;
+                        newBasePath = getBasePath(resolvedPath);
                     }
                     
                     // Récursivement aplatir le schéma référencé
-                    JsonNode flattenedRef = flattenSchema(referencedSchema, getBasePath(resolvedPath), new HashSet<>(processedRefs));
+                    JsonNode flattenedRef = flattenSchema(referencedSchema, newBasePath, new HashSet<>(processedRefs), recursiveRootSchema);
                     
                     processedRefs.remove(ref);
                     return flattenedRef;
@@ -100,7 +120,7 @@ public class SchemaFlattenerService {
             while (fieldNames.hasNext()) {
                 String fieldName = fieldNames.next();
                 JsonNode fieldValue = objectNode.get(fieldName);
-                result.set(fieldName, flattenSchema(fieldValue, basePath, processedRefs));
+                result.set(fieldName, flattenSchema(fieldValue, basePath, processedRefs, rootSchema));
             }
             return result;
             
@@ -108,7 +128,7 @@ public class SchemaFlattenerService {
             // Traiter récursivement tous les éléments du tableau
             for (int i = 0; i < node.size(); i++) {
                 JsonNode arrayElement = node.get(i);
-                JsonNode flattenedElement = flattenSchema(arrayElement, basePath, processedRefs);
+                JsonNode flattenedElement = flattenSchema(arrayElement, basePath, processedRefs, rootSchema);
                 ((com.fasterxml.jackson.databind.node.ArrayNode) node).set(i, flattenedElement);
             }
         }
@@ -162,8 +182,7 @@ public class SchemaFlattenerService {
         return ref != null && 
                !ref.startsWith("http://") && 
                !ref.startsWith("https://") && 
-               !ref.startsWith("#") &&
-               (ref.contains(".json") || ref.contains(".schema"));
+               (ref.contains(".json") || ref.contains(".schema") || ref.startsWith("#/$defs/"));
     }
 
     private String resolvePath(String basePath, String ref) {
