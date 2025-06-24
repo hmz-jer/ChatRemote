@@ -1,172 +1,97 @@
-package com.example.mockclientvop.config;
+@RestController
+@RequestMapping("/api/admin")
+public class AdminController {
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.yaml.snakeyaml.Yaml;
-
-import javax.annotation.PostConstruct;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.attribute.FileTime;
-import java.util.HashMap;
-import java.util.Map;
-
-@Configuration
-@EnableScheduling
-public class BankResponsesConfig {
-
-    private static final Logger logger = LoggerFactory.getLogger(BankResponsesConfig.class);
-
-    @Value("${mock-vop.responses.config-file:file:/opt/mock-client-vop/conf/bank-responses.yml}")
-    private String configFilePath;
-
-    @Value("${mock-vop.responses.auto-reload-enabled:true}")
-    private boolean autoReloadEnabled;
-
-    @Value("${mock-vop.responses.auto-reload-interval-ms:30000}")
-    private long autoReloadIntervalMs;
-
-    private Map<String, Object> responsesConfig = new HashMap<>();
-    private FileTime lastModifiedTime = null;
-    private String actualFilePath;
-
-    @PostConstruct
-    public void init() {
-        // Déterminer le chemin réel du fichier
-        actualFilePath = configFilePath.replace("file:", "");
-        
-        logger.info("Configuration des réponses bancaires:");
-        logger.info("- Fichier: {}", actualFilePath);
-        logger.info("- Rechargement automatique: {}", autoReloadEnabled);
-        logger.info("- Intervalle de vérification: {}ms", autoReloadIntervalMs);
-        
-        // Chargement initial
-        loadResponses();
-    }
+    @Autowired
+    private BankResponsesConfig bankResponsesConfig;
 
     /**
-     * Vérifie et recharge le fichier de configuration si modifié
+     * Force le rechargement du fichier bank-responses.yml
      */
-    @Scheduled(fixedDelayString = "${mock-vop.responses.auto-reload-interval-ms:30000}")
-    public void checkAndReloadIfModified() {
-        if (!autoReloadEnabled) {
-            return;
-        }
-
+    @PostMapping("/responses/reload")
+    public ResponseEntity<Map<String, Object>> reloadBankResponses() {
+        Map<String, Object> result = new HashMap<>();
+        
         try {
-            Path configPath = Paths.get(actualFilePath);
+            bankResponsesConfig.forceReload();
             
-            if (!Files.exists(configPath)) {
-                logger.warn("Fichier de configuration introuvable: {}", actualFilePath);
-                return;
-            }
-
-            FileTime currentModifiedTime = Files.getLastModifiedTime(configPath);
+            // Obtenir un résumé de la nouvelle configuration
+            Map<String, Object> providers = bankResponsesConfig.getProvidersSection();
             
-            // Vérifier si le fichier a été modifié
-            if (lastModifiedTime == null || currentModifiedTime.compareTo(lastModifiedTime) > 0) {
-                logger.info("Modification détectée du fichier de configuration, rechargement...");
-                loadResponses();
-            }
+            result.put("success", true);
+            result.put("message", "Configuration des réponses rechargée avec succès");
+            result.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+            result.put("providersCount", providers.size());
+            result.put("providersConfigured", providers.keySet());
             
-        } catch (IOException e) {
-            logger.error("Erreur lors de la vérification de modification du fichier", e);
+        } catch (Exception e) {
+            logger.error("Erreur lors du rechargement de la configuration", e);
+            result.put("success", false);
+            result.put("message", "Erreur lors du rechargement: " + e.getMessage());
         }
-    }
-
-    /**
-     * Force le rechargement du fichier de configuration
-     */
-    public void forceReload() {
-        logger.info("Rechargement forcé du fichier de configuration...");
-        loadResponses();
-    }
-
-    /**
-     * Charge ou recharge le fichier de configuration
-     */
-    public void loadResponses() {
-        try {
-            Path configPath = Paths.get(actualFilePath);
-            
-            if (!Files.exists(configPath)) {
-                logger.warn("Fichier de configuration introuvable: {}", actualFilePath);
-                return;
-            }
-
-            // Lire le fichier
-            try (InputStream inputStream = Files.newInputStream(configPath)) {
-                Yaml yaml = new Yaml();
-                Object loaded = yaml.load(inputStream);
-                
-                if (loaded instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> config = (Map<String, Object>) loaded;
-                    responsesConfig = config;
-                    
-                    // Mettre à jour le timestamp de dernière modification
-                    lastModifiedTime = Files.getLastModifiedTime(configPath);
-                    
-                    logger.info("Configuration rechargée avec succès depuis: {}", actualFilePath);
-                    logConfigurationSummary();
-                } else {
-                    logger.error("Le fichier ne contient pas une structure YAML valide");
-                }
-            }
-            
-        } catch (IOException e) {
-            logger.error("Erreur lors du chargement du fichier de configuration: {}", actualFilePath, e);
-        }
-    }
-
-    /**
-     * Affiche un résumé de la configuration chargée
-     */
-    private void logConfigurationSummary() {
-        Map<String, Object> responses = getResponsesSection();
-        Map<String, Object> providers = getProvidersSection();
         
-        logger.info("Configuration chargée:");
-        logger.info("- Réponse par défaut: {}", responses.containsKey("default") ? "configurée" : "non configurée");
-        logger.info("- Nombre de providers: {}", providers.size());
-        logger.info("- Providers configurés: {}", providers.keySet());
+        return ResponseEntity.ok(result);
     }
 
-    // ... autres méthodes existantes (getResponsesSection, getProvidersSection, etc.)
-
-    @Bean
-    public Map<String, Object> bankResponsesConfiguration() {
-        return responsesConfig;
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getResponsesSection() {
-        Object responses = responsesConfig.getOrDefault("responses", new HashMap<>());
-        if (responses instanceof Map) {
-            return (Map<String, Object>) responses;
+    /**
+     * Obtient le statut de la configuration actuelle
+     */
+    @GetMapping("/responses/status")
+    public ResponseEntity<Map<String, Object>> getBankResponsesStatus() {
+        Map<String, Object> status = new HashMap<>();
+        
+        try {
+            Path configPath = Paths.get(bankResponsesConfig.getActualFilePath());
+            
+            status.put("configFile", bankResponsesConfig.getActualFilePath());
+            status.put("fileExists", Files.exists(configPath));
+            status.put("autoReloadEnabled", bankResponsesConfig.isAutoReloadEnabled());
+            
+            if (Files.exists(configPath)) {
+                status.put("lastModified", Files.getLastModifiedTime(configPath).toString());
+                status.put("fileSize", Files.size(configPath));
+            }
+            
+            Map<String, Object> providers = bankResponsesConfig.getProvidersSection();
+            status.put("providersCount", providers.size());
+            status.put("providersConfigured", providers.keySet());
+            
+        } catch (Exception e) {
+            logger.error("Erreur lors de la récupération du statut", e);
+            status.put("error", e.getMessage());
         }
-        return new HashMap<>();
+        
+        return ResponseEntity.ok(status);
     }
 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getProvidersSection() {
-        Map<String, Object> responses = getResponsesSection();
-        Object providers = responses.getOrDefault("providers", new HashMap<>());
-        if (providers instanceof Map) {
-            return (Map<String, Object>) providers;
-        }
-        return new HashMap<>();
+    /**
+     * Retourne le contenu actuel de la configuration (sans mots de passe)
+     */
+    @GetMapping("/responses/preview")
+    public ResponseEntity<Map<String, Object>> previewBankResponses() {
+        Map<String, Object> preview = new HashMap<>();
+        
+        Map<String, Object> responses = bankResponsesConfig.getResponsesSection();
+        Map<String, Object> providers = bankResponsesConfig.getProvidersSection();
+        
+        preview.put("defaultConfigured", responses.containsKey("default"));
+        preview.put("providers", providers.keySet());
+        
+        // Afficher un aperçu des réponses (sans les corps complets)
+        Map<String, Object> providersSummary = new HashMap<>();
+        providers.forEach((key, value) -> {
+            if (value instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> providerConfig = (Map<String, Object>) value;
+                Map<String, Object> summary = new HashMap<>();
+                summary.put("status", providerConfig.get("status"));
+                summary.put("hasHeaders", providerConfig.containsKey("headers"));
+                summary.put("hasBody", providerConfig.containsKey("body"));
+                providersSummary.put(key, summary);
+            }
+        });
+        preview.put("providersSummary", providersSummary);
+        
+        return ResponseEntity.ok(preview);
     }
-
-    // ... autres méthodes existantes
 }
