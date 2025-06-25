@@ -1,4 +1,8 @@
- Map<String, String> headers = new HashMap<>();
+
+variables.put("timestamp", LocalDateTime.now().atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")));
+variables.put("requestId", UUID.randomUUID().toString());
+
+Map<String, String> headers = new HashMap<>();
 if (responseConfig.containsKey("headers") && responseConfig.get("headers") instanceof Map) {
     @SuppressWarnings("unchecked")
     Map<String, Object> headersConfig = (Map<String, Object>) responseConfig.get("headers");
