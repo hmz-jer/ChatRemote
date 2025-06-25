@@ -1,282 +1,283 @@
- Ah d'accord ! Vous voulez créer un vrai objet HttpServletRequest pour les tests. Voici comment faire :Création d'un HttpServletRequest pour les testspackage com.example.mockclientvop.service;
+ Pour afficher le message reçu dans le contrôleur, voici comment modifier le code :Modification du MockController.javapackage com.example.mockclientvop.controller;
 
-import com.example.mockclientvop.config.BankResponsesConfig;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.example.mockclientvop.service.BankResponseService;
+import com.example.mockclientvop.service.CertificateService;
+import com.example.mockclientvop.service.RoutingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+@RestController
+@RequestMapping("/api")
+public class MockController {
 
-@ExtendWith(MockitoExtension.class)
-class BankResponseServiceTest {
-
-    @Mock
-    private BankResponsesConfig bankResponsesConfig;
-
-    @InjectMocks
+    private static final Logger logger = LoggerFactory.getLogger(MockController.class);
+    
+    @Autowired
+    private CertificateService certificateService;
+    
+    @Autowired
+    private RoutingService routingService;
+    
+    @Autowired
     private BankResponseService bankResponseService;
 
-    private Map<String, Object> mockResponseConfig;
-    private Map<String, String> mockHeaders;
-    private MockHttpServletRequest request;
-
-    @BeforeEach
-    void setUp() {
-        // Configuration de réponse mock
-        mockResponseConfig = new HashMap<>();
-        mockResponseConfig.put("status", 200);
-        mockResponseConfig.put("body", "{\"message\":\"success\"}");
-
-        mockHeaders = new HashMap<>();
-        mockHeaders.put("Content-Type", "application/json");
-        mockResponseConfig.put("headers", mockHeaders);
-
-        // Création d'un HttpServletRequest réel pour les tests
-        request = new MockHttpServletRequest();
-        request.setRequestURI("/api/status");
-        request.setMethod("GET");
-        request.setServerName("localhost");
-        request.setServerPort(8443);
-        request.setScheme("https");
-    }
-
-    @Test
-    void testGenerateResponse_WithValidRequestUrl_ShouldReturnConfiguredResponse() {
-        // Given
-        String orgId = "TEST_ORG";
-        request.setRequestURI("/api/provider/12345/status");
-
-        when(bankResponsesConfig.getBankResponseByUrl("/api/provider/12345/status"))
-                .thenReturn(mockResponseConfig);
-
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        assertEquals("{\"message\":\"success\"}", result.getBody());
-
-        // Vérifier les headers
-        assertTrue(result.getHeaders().containsKey("Content-Type"));
-        assertEquals("application/json", result.getHeaders().getFirst("Content-Type"));
-
-        // Vérifier l'appel au mock
-        verify(bankResponsesConfig).getBankResponseByUrl("/api/provider/12345/status");
-    }
-
-    @Test
-    void testGenerateResponse_WithXRequestIdHeader_ShouldUseProvidedRequestId() {
-        // Given
-        String orgId = "TEST_ORG";
-        String providedRequestId = "custom-request-id-123";
+    @GetMapping("/status")
+    public ResponseEntity<?> getStatus(HttpServletRequest request) {
+        // Log des informations de la requête
+        logRequestInfo(request, null);
         
-        // Ajouter le header x-request-id
-        request.addHeader("x-request-id", providedRequestId);
-        request.setRequestURI("/api/status");
-
-        // Configuration du body avec variable requestId
-        mockResponseConfig.put("body", "{\"message\":\"success\",\"requestId\":\"${requestId}\"}");
-
-        when(bankResponsesConfig.getBankResponseByUrl("/api/status"))
-                .thenReturn(mockResponseConfig);
-
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        assertTrue(result.getBody().contains(providedRequestId));
-        assertTrue(result.getBody().contains("\"requestId\":\"" + providedRequestId + "\""));
-    }
-
-    @Test
-    void testGenerateResponse_WithoutXRequestIdHeader_ShouldGenerateRequestId() {
-        // Given
-        String orgId = "TEST_ORG";
-        request.setRequestURI("/api/status");
-        // Pas de header x-request-id ajouté
-
-        // Configuration du body avec variable requestId
-        mockResponseConfig.put("body", "{\"message\":\"success\",\"requestId\":\"${requestId}\"}");
-
-        when(bankResponsesConfig.getBankResponseByUrl("/api/status"))
-                .thenReturn(mockResponseConfig);
-
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        // Vérifier qu'un requestId a été généré (format UUID)
-        assertTrue(result.getBody().contains("\"requestId\":\""));
-        // Le requestId généré doit avoir un format UUID
-        assertTrue(result.getBody().matches(".*\"requestId\":\"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\".*"));
-    }
-
-    @Test
-    void testGenerateResponse_WithVariablesInHeaders_ShouldReplaceVariables() {
-        // Given
-        String orgId = "TEST_ORG";
-        String providedRequestId = "header-request-id-456";
+        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
         
-        // Configuration de la request
-        request.addHeader("x-request-id", providedRequestId);
-        request.setRequestURI("/api/test");
-
-        // Configuration des headers avec variables
-        mockHeaders.put("X-Request-ID", "${requestId}");
-        mockHeaders.put("X-Timestamp", "${timestamp}");
-        mockHeaders.put("X-PSP-ID", "${pspId}");
-
-        when(bankResponsesConfig.getBankResponseByUrl("/api/test"))
-                .thenReturn(mockResponseConfig);
-
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(providedRequestId, result.getHeaders().getFirst("X-Request-ID"));
-        assertEquals(orgId, result.getHeaders().getFirst("X-PSP-ID"));
-        assertNotNull(result.getHeaders().getFirst("X-Timestamp"));
-        // Vérifier que le timestamp a le bon format ISO
-        assertTrue(result.getHeaders().getFirst("X-Timestamp").matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z"));
+        if (certs == null || certs.length == 0) {
+            logger.error("No client certificate provided");
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "No client certificate provided");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        
+        X509Certificate clientCert = certs[0];
+        
+        // Validation du certificat QWAC
+        boolean isValid = certificateService.validateQWACCertificate(clientCert);
+        if (!isValid) {
+            logger.error("Invalid QWAC certificate");
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Invalid QWAC certificate");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+        
+        // Extraction du PSP ID
+        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(clientCert);
+        String pspIdValue = pspId.orElse(null);
+        
+        // Générer une réponse personnalisée
+        return bankResponseService.generateResponse(pspIdValue, request);
+    }
+    
+    @PostMapping("/status")
+    public ResponseEntity<?> postStatus(HttpServletRequest request, @RequestBody(required = false) String requestBody) {
+        // Log des informations de la requête avec le body
+        logRequestInfo(request, requestBody);
+        
+        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
+        
+        if (certs == null || certs.length == 0) {
+            logger.error("No client certificate provided");
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "No client certificate provided");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        
+        X509Certificate clientCert = certs[0];
+        
+        // Validation du certificat QWAC
+        boolean isValid = certificateService.validateQWACCertificate(clientCert);
+        if (!isValid) {
+            logger.error("Invalid QWAC certificate");
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Invalid QWAC certificate");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+        
+        // Extraction du PSP ID
+        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(clientCert);
+        String pspIdValue = pspId.orElse(null);
+        
+        // Log du message reçu
+        if (requestBody != null && !requestBody.trim().isEmpty()) {
+            logger.info("Message reçu dans POST /api/status: {}", requestBody);
+        }
+        
+        // Générer une réponse personnalisée
+        return bankResponseService.generateResponse(pspIdValue, request);
+    }
+    
+    @RequestMapping(value = "/**", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
+    public ResponseEntity<?> handleRequest(HttpServletRequest request, @RequestBody(required = false) String requestBody) {
+        // Log des informations de la requête
+        logRequestInfo(request, requestBody);
+        
+        X509Certificate[] certs = (X509Certificate[]) request.getAttribute("javax.servlet.request.X509Certificate");
+        
+        if (certs == null || certs.length == 0) {
+            logger.error("No client certificate provided");
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "No client certificate provided");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        
+        X509Certificate clientCert = certs[0];
+        
+        // Validation du certificat QWAC
+        boolean isValid = certificateService.validateQWACCertificate(clientCert);
+        if (!isValid) {
+            logger.error("Invalid QWAC certificate");
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Invalid QWAC certificate");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+        
+        // Extraction du PSP ID
+        Optional<String> pspId = certificateService.extractPSPIdFromCertificate(clientCert);
+        String pspIdValue = pspId.orElse(null);
+        
+        // Construction de la réponse pour simuler un forward
+        String targetUrl = routingService.determineTargetUrl(clientCert);
+        
+        logger.info("Simulating forwarding {} request to {}", request.getMethod(), targetUrl);
+        
+        // Générer une réponse personnalisée
+        return bankResponseService.generateResponse(pspIdValue, request);
     }
 
-    @Test
-    void testGenerateResponse_WithTimestampVariable_ShouldUseCorrectFormat() {
-        // Given
-        String orgId = "TEST_ORG";
-        request.setRequestURI("/api/timestamp-test");
+    /**
+     * Log les informations détaillées de la requête
+     */
+    private void logRequestInfo(HttpServletRequest request, String requestBody) {
+        logger.info("=== DÉBUT DE LA REQUÊTE ===");
+        logger.info("Méthode: {}", request.getMethod());
+        logger.info("URI: {}", request.getRequestURI());
+        logger.info("URL complète: {}", request.getRequestURL());
+        logger.info("Query String: {}", request.getQueryString());
+        logger.info("Remote Address: {}", request.getRemoteAddr());
+        logger.info("User Agent: {}", request.getHeader("User-Agent"));
+        
+        // Log des headers
+        logger.info("=== HEADERS ===");
+        request.getHeaderNames().asIterator().forEachRemaining(headerName -> {
+            String headerValue = request.getHeader(headerName);
+            // Masquer les headers sensibles
+            if (headerName.toLowerCase().contains("authorization") || 
+                headerName.toLowerCase().contains("cookie")) {
+                headerValue = "***MASKED***";
+            }
+            logger.info("{}: {}", headerName, headerValue);
+        });
+        
+        // Log des paramètres
+        if (!request.getParameterMap().isEmpty()) {
+            logger.info("=== PARAMÈTRES ===");
+            request.getParameterMap().forEach((key, values) -> {
+                logger.info("{}: {}", key, String.join(", ", values));
+            });
+        }
+        
+        // Log du body pour les requêtes POST/PUT
+        if (requestBody != null && !requestBody.trim().isEmpty()) {
+            logger.info("=== BODY DE LA REQUÊTE ===");
+            // Limiter la taille du log pour éviter les logs trop volumineux
+            if (requestBody.length() > 1000) {
+                logger.info("Body (tronqué): {}", requestBody.substring(0, 1000) + "... [TRONQUÉ]");
+                logger.info("Taille totale du body: {} caractères", requestBody.length());
+            } else {
+                logger.info("Body: {}", requestBody);
+            }
+        }
+        
+        logger.info("=== FIN DES INFORMATIONS DE LA REQUÊTE ===");
+    }
+}Alternative avec un intercepteur (plus propre)Si vous voulez logger toutes les requêtes automatiquement, créez un intercepteur :RequestLoggingInterceptor.javapackage com.example.mockclientvop.config;
 
-        // Configuration du body avec variable timestamp
-        mockResponseConfig.put("body", "{\"timestamp\":\"${timestamp}\",\"server\":\"test\"}");
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
 
-        when(bankResponsesConfig.getBankResponseByUrl("/api/timestamp-test"))
-                .thenReturn(mockResponseConfig);
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
+@Component
+public class RequestLoggingInterceptor implements HandlerInterceptor {
 
-        // Then
-        assertNotNull(result);
-        // Vérifier le format timestamp ISO 8601 avec Z (UTC)
-        assertTrue(result.getBody().matches(".*\"timestamp\":\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z\".*"));
+    private static final Logger logger = LoggerFactory.getLogger(RequestLoggingInterceptor.class);
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        logRequestDetails(request);
+        return true;
     }
 
-    @Test
-    void testGenerateResponse_WithPspIdVariable_ShouldReplacePspId() {
-        // Given
-        String orgId = "PSDFR-ACPR-12345";
-        request.setRequestURI("/api/psp-test");
-
-        // Configuration du body avec variable pspId
-        mockResponseConfig.put("body", "{\"pspId\":\"${pspId}\",\"status\":\"active\"}");
-
-        when(bankResponsesConfig.getBankResponseByUrl("/api/psp-test"))
-                .thenReturn(mockResponseConfig);
-
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        assertTrue(result.getBody().contains("\"pspId\":\"" + orgId + "\""));
+    private void logRequestDetails(HttpServletRequest request) {
+        logger.info("=== REQUÊTE REÇUE ===");
+        logger.info("Méthode: {} | URI: {} | IP: {}", 
+                   request.getMethod(), 
+                   request.getRequestURI(), 
+                   request.getRemoteAddr());
+        
+        // Log du x-request-id s'il existe
+        String requestId = request.getHeader("x-request-id");
+        if (requestId != null) {
+            logger.info("X-Request-ID: {}", requestId);
+        }
+        
+        // Log du User-Agent
+        String userAgent = request.getHeader("User-Agent");
+        if (userAgent != null) {
+            logger.info("User-Agent: {}", userAgent);
+        }
+        
+        // Log du Content-Type
+        String contentType = request.getContentType();
+        if (contentType != null) {
+            logger.info("Content-Type: {}", contentType);
+        }
+        
+        logger.info("===================");
     }
+}WebConfig.javapackage com.example.mockclientvop.config;
 
-    @Test
-    void testGenerateResponse_WithComplexRequest_ShouldHandleAllVariables() {
-        // Given
-        String orgId = "COMPLEX_TEST_PSP";
-        String requestId = "complex-request-123";
-        
-        // Configuration d'une request complexe
-        request.setRequestURI("/api/provider/54321/accounts");
-        request.setMethod("POST");
-        request.addHeader("x-request-id", requestId);
-        request.addHeader("Content-Type", "application/json");
-        request.addHeader("User-Agent", "TestClient/1.0");
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-        // Configuration d'une réponse complexe avec toutes les variables
-        Map<String, Object> complexResponse = new HashMap<>();
-        complexResponse.put("status", 201);
-        
-        Map<String, String> complexHeaders = new HashMap<>();
-        complexHeaders.put("Content-Type", "application/json");
-        complexHeaders.put("X-Request-ID", "${requestId}");
-        complexHeaders.put("X-Timestamp", "${timestamp}");
-        complexHeaders.put("X-PSP-ID", "${pspId}");
-        complexResponse.put("headers", complexHeaders);
-        
-        String complexBody = "{\n" +
-                "  \"status\": \"created\",\n" +
-                "  \"requestId\": \"${requestId}\",\n" +
-                "  \"timestamp\": \"${timestamp}\",\n" +
-                "  \"pspId\": \"${pspId}\",\n" +
-                "  \"data\": {\n" +
-                "    \"accountId\": \"ACC-${requestId}\"\n" +
-                "  }\n" +
-                "}";
-        complexResponse.put("body", complexBody);
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
 
-        when(bankResponsesConfig.getBankResponseByUrl("/api/provider/54321/accounts"))
-                .thenReturn(complexResponse);
+    @Autowired
+    private RequestLoggingInterceptor requestLoggingInterceptor;
 
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(201, result.getStatusCodeValue());
-        
-        // Vérifier les headers
-        assertEquals(requestId, result.getHeaders().getFirst("X-Request-ID"));
-        assertEquals(orgId, result.getHeaders().getFirst("X-PSP-ID"));
-        assertNotNull(result.getHeaders().getFirst("X-Timestamp"));
-        
-        // Vérifier le body
-        String body = result.getBody();
-        assertTrue(body.contains("\"requestId\": \"" + requestId + "\""));
-        assertTrue(body.contains("\"pspId\": \"" + orgId + "\""));
-        assertTrue(body.contains("\"accountId\": \"ACC-" + requestId + "\""));
-        assertTrue(body.matches(".*\"timestamp\": \"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z\".*"));
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(requestLoggingInterceptor)
+                .addPathPatterns("/api/**"); // Appliquer seulement aux endpoints API
     }
-
-    @Test
-    void testGenerateResponse_WithDefaultResponse_WhenNoConfigFound() {
-        // Given
-        String orgId = "DEFAULT_TEST";
-        request.setRequestURI("/api/unknown-endpoint");
-
-        Map<String, Object> defaultResponse = new HashMap<>();
-        defaultResponse.put("status", 200);
-        defaultResponse.put("body", "{\"message\":\"Default response\",\"requestId\":\"${requestId}\"}");
-        defaultResponse.put("headers", new HashMap<>());
-
-        when(bankResponsesConfig.getBankResponseByUrl("/api/unknown-endpoint")).thenReturn(null);
-        when(bankResponsesConfig.getDefaultResponse()).thenReturn(defaultResponse);
-
-        // When
-        ResponseEntity<String> result = bankResponseService.generateResponse(orgId, request);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(200, result.getStatusCodeValue());
-        assertTrue(result.getBody().contains("Default response"));
-        // Vérifier qu'un requestId a été généré même pour la réponse par défaut
-        assertTrue(result.getBody().matches(".*\"requestId\":\"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\".*"));
-    }
-}Dépendance à ajouter dans build.gradledependencies {
-    // ... autres dépendances
-    testImplementation 'org.springframework:spring-test'
-}Avantages de cette approcheHttpServletRequest réel : Utilisation de MockHttpServletRequest qui implémente vraiment l'interfaceConfiguration flexible : Possibilité de configurer tous les aspects de la request (URI, headers, méthode, etc.)Tests plus réalistes : Les tests reflètent mieux le comportement réel de l'applicationFacilité de maintenance : Plus facile à comprendre et maintenir qu'avec des mocks complexesAvec MockHttpServletRequest, vous pouvez :Définir l'URI : request.setRequestURI("/api/test")Ajouter des headers : request.addHeader("x-request-id", "123")Configurer la méthode HTTP : request.setMethod("POST")Ajouter des paramètres : request.addParameter("param", "value") 
+}Configuration des logs dans application.ymllogging:
+  level:
+    com.example.mockclientvop.controller.MockController: DEBUG
+    com.example.mockclientvop.config.RequestLoggingInterceptor: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"Test avec curl# Test avec message JSON
+curl -v \
+  -H "Content-Type: application/json" \
+  -H "x-request-id: test-12345" \
+  -d '{"message": "Hello from client", "amount": 100.50, "currency": "EUR"}' \
+  --cert-type P12 \
+  --cert /provider/Natixis/natixis-qwac.p12:password \
+  --cacert /provider/psd2-ac-root.cert.pem \
+  https://10.55.8.12:8443/api/statusVous verrez dans les logs:2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - === DÉBUT DE LA REQUÊTE ===
+2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - Méthode: POST
+2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - URI: /api/status
+2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - x-request-id: test-12345
+2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - Content-Type: application/json
+2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - === BODY DE LA REQUÊTE ===
+2024-01-15 14:30:25 [http-nio-8443-exec-1] INFO  MockController - Body: {"message": "Hello from client", "amount": 100.50, "currency": "EUR"}Cette approche vous permet de voir tous les détails des requêtes reçues par votre mock, y compris les messages JSON envoyés par les clients.
