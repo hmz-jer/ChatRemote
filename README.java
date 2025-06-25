@@ -1,19 +1,2 @@
 
-variables.put("timestamp", LocalDateTime.now().atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")));
-variables.put("requestId", UUID.randomUUID().toString());
-
-Map<String, String> headers = new HashMap<>();
-if (responseConfig.containsKey("headers") && responseConfig.get("headers") instanceof Map) {
-    @SuppressWarnings("unchecked")
-    Map<String, Object> headersConfig = (Map<String, Object>) responseConfig.get("headers");
-    headersConfig.forEach((key, value) -> {
-        if (value != null) {
-            // Injecter les variables dans les headers
-            String headerValue = value.toString();
-            for (Map.Entry<String, String> variable : variables.entrySet()) {
-                headerValue = headerValue.replace("${" + variable.getKey() + "}", variable.getValue());
-            }
-            headers.put(key, headerValue);
-        }
-    });
-}
+ chrome.exe --no-first-run --disable-background-networking --disable-sync --disable-default-apps --no-service-autorun --noerrdialogs --disable-translate --disable-component-update --disable-domain-reliability --disable-features=NetworkService,SafeBrowsingService,AutoupdateCheck
