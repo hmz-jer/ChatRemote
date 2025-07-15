@@ -1,69 +1,8 @@
-#!/bin/bash
+L’entretien avec mon manager s’est très bien passé. Il m’a permis de clarifier plusieurs points importants, ce qui m’a beaucoup rassuré. Je suis satisfait des échanges que nous avons eus et du cadre posé. Nous avons également défini ensemble des objectifs clairs pour la suite, ce qui me motive davantage.
 
-###############################################
-# Script de génération de certificats QWAC pour Mock VOP
-# Usage: ./generate_certificates.sh
-###############################################
 
-# Définir le répertoire de base fixe
-BASE_DIR="/opt/mock-client-vop"
 
-# Configuration globale
-CA_NAME="Generic-VOP-CA"
-CA_DAYS=3650
-CERT_DAYS=365
-COUNTRY="FR"
-STATE="Ile-de-France"
-LOCALITY="Paris"
-CA_ORG="VOP Mock CA"
-SERVER_KEYSTORE_PASSWORD="serverpass"
-TRUSTSTORE_PASSWORD="trustpass"
-
-# Couleurs pour les messages
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Fonction d'affichage
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-# Vérifier que OpenSSL et keytool sont installés
-check_prerequisites() {
-    log_info "Vérification des prérequis..."
-    
-    if ! command -v openssl &> /dev/null; then
-        log_error "OpenSSL n'est pas installé"
-        exit 1
-    fi
-    
-    if ! command -v keytool &> /dev/null; then
-        log_error "Keytool (JDK) n'est pas installé"
-        exit 1
-    fi
-    
-    log_info "Prérequis OK"
-}
-
-# Créer la structure des répertoires
-create_directories() {
-    log_info "Création de la structure des répertoires..."
-    
-    mkdir -p "$BASE_DIR/certs/ca"
-    mkdir -p "$BASE_DIR/certs/server"
-    mkdir -p "$BASE_DIR/certs/providers"
-    
-    log_info "Structure créée"
+log_info "Structure créée"
 }
 
 # Générer la CA racine
