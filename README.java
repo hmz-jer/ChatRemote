@@ -1,5 +1,11 @@
  /**
  * Version optimisée du BerDecoderHandler pour Netty 4.1.14
+ * Optimisations principales :
+ * 1. Élimination de msg.copy() (gain majeur de performance)
+ * 2. Gestion optimisée des ByteBuf
+ * 3. Validation rapide des données BER
+ * 4. Pool d'objets pour réutilisation (optionnel)
+ * 
  * @author Seb Perriot
  * @version 1.0
  * @since 2015-09-14
@@ -7,126 +13,87 @@
 public class BerDecoderHandler extends ByteToMessageDecoder {
     private static final Logger LOG = LoggerFactory.getLogger(BerDecoderHandler.class);
     
-    // Réutilisation d'instance pour éviter les allocations
-    private final ThreadLocal<BerDecoder> decoderThreadLocal = 
-        ThreadLocal.withInitial(() -> new BerDecoder());
+    // Pool optionnel pour réutiliser les instances BerDecoder
+    private final Queue<BerDecoder> decoderPool = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger poolSize = new AtomicInteger(0);
+    private static final int MAX_POOL_SIZE = 16;
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-        // Vérification préliminaire de la taille minimale
-        if (in.readableBytes() < getMinimumBerMessageSize()) {
-            return; // Pas assez de données, attendre
+        // Vérification rapide de la taille minimale BER (tag + length minimum)
+        if (in.readableBytes() < 2) {
+            return; // Pas assez de données, attendre plus
         }
         
-        // Marquer la position actuelle pour pouvoir revenir en arrière
+        // Validation rapide du premier byte (tag BER)
+        byte firstByte = in.getByte(in.readerIndex());
+        if (!isValidBerTag(firstByte)) {
+            LOG.warn("Tag BER invalide: 0x{}", Integer.toHexString(firstByte & 0xFF));
+            ctx.close();
+            return;
+        }
+        
+        // Marquer la position pour pouvoir revenir en arrière si nécessaire
         in.markReaderIndex();
         
         try {
-            // Utiliser l'instance thread-local au lieu de créer un nouveau decoder
-            BerDecoder decoder = decoderThreadLocal.get();
+            // *** OPTIMISATION CRITIQUE ***
+            // ANCIEN CODE (très coûteux) :
+            // ByteBuf copy = msg.copy();
+            // BerDecoder decoder = new BerDecoder(copy);
             
-            // Option 1: Si BerDecoder peut accepter ByteBuf directement (optimal)
-            BerMessage message = decoder.decode(in);
+            // NOUVEAU CODE (optimisé) :
+            // Passer directement le ByteBuf sans copie
+            BerDecoder decoder = new BerDecoder(in);
             
-            if (message != null) {
+            // Utiliser la méthode getMessage() existante
+            BerMessage message = decoder.getMessage();
+            
+            if (message != null && !message.isEmpty()) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Decoded BER message of type: {}", 
-                             message.getClass().getSimpleName());
+                    LOG.debug("Decoded BER message with {} fields", message.size());
                 }
                 out.add(message);
             } else {
-                // Message incomplet, revenir à la position marquée
+                // Message incomplet ou vide, revenir à la position marquée
                 in.resetReaderIndex();
             }
             
         } catch (IndexOutOfBoundsException e) {
             // Pas assez de données disponibles
             in.resetReaderIndex();
-        } catch (Exception e) {
-            // Erreur de décodage, revenir à la position marquée
+            // Ne pas logger en debug pour éviter le spam
+        } catch (IOException e) {
+            // Erreur de décodage BER (données corrompues ou incomplètes)
             in.resetReaderIndex();
-            throw e;
+            if (e.getMessage().contains("Can't read next field")) {
+                // Données incomplètes, attendre plus de données
+                return;
+            } else {
+                LOG.warn("Erreur de décodage BER, fermeture connexion: {}", e.getMessage());
+                ctx.close();
+            }
+        } catch (Exception e) {
+            // Autres erreurs
+            in.resetReaderIndex();
+            LOG.error("Erreur inattendue dans le décodage BER", e);
+            ctx.close();
         }
     }
     
     /**
-     * Alternative si BerDecoder nécessite un byte array
-     * (moins optimal mais compatible)
+     * Version alternative avec pool d'objets pour réutilisation
+     * (à utiliser si vous modifiez BerDecoder pour supporter la réinitialisation)
      */
-    @Override
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-        if (in.readableBytes() < getMinimumBerMessageSize()) {
+    protected void decodeWithPool(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        if (in.readableBytes() < 2) {
             return;
         }
         
-        in.markReaderIndex();
-        
-        try {
-            // Lire sans copier en utilisant un slice
-            ByteBuf slice = in.readSlice(in.readableBytes());
-            
-            // Si BerDecoder nécessite absolument un byte array
-            if (slice.hasArray() && slice.arrayOffset() == 0) {
-                // Utiliser directement le backing array si possible
-                byte[] array = slice.array();
-                BerDecoder decoder = decoderThreadLocal.get();
-                BerMessage message = decoder.decode(array, 0, slice.readableBytes());
-                
-                if (message != null) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Decoded BER message");
-                    }
-                    out.add(message);
-                    // Avancer le reader index du nombre d'octets consommés
-                    in.readerIndex(in.readerIndex() + decoder.getConsumedBytes());
-                } else {
-                    in.resetReaderIndex();
-                }
-            } else {
-                // Fallback: copie minimale nécessaire
-                byte[] bytes = new byte[slice.readableBytes()];
-                slice.readBytes(bytes);
-                
-                BerDecoder decoder = decoderThreadLocal.get();
-                BerMessage message = decoder.decode(bytes);
-                
-                if (message != null) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Decoded BER message");
-                    }
-                    out.add(message);
-                } else {
-                    in.resetReaderIndex();
-                }
-            }
-            
-        } catch (Exception e) {
-            in.resetReaderIndex();
-            throw e;
-        }
-    }
-    
-    /**
-     * Version avec pool d'objets simple pour Netty 4.1.14
-     */
-    private static final Queue<BerDecoder> DECODER_POOL = new ConcurrentLinkedQueue<>();
-    private static final int MAX_POOL_SIZE = 32;
-    
-    private BerDecoder borrowDecoder() {
-        BerDecoder decoder = DECODER_POOL.poll();
-        return decoder != null ? decoder : new BerDecoder();
-    }
-    
-    private void returnDecoder(BerDecoder decoder) {
-        if (DECODER_POOL.size() < MAX_POOL_SIZE) {
-            decoder.reset(); // Supposant qu'il y a une méthode reset
-            DECODER_POOL.offer(decoder);
-        }
-    }
-    
-    @Override
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-        if (in.readableBytes() < getMinimumBerMessageSize()) {
+        // Validation rapide
+        byte firstByte = in.getByte(in.readerIndex());
+        if (!isValidBerTag(firstByte)) {
+            ctx.close();
             return;
         }
         
@@ -134,62 +101,207 @@ public class BerDecoderHandler extends ByteToMessageDecoder {
         BerDecoder decoder = borrowDecoder();
         
         try {
-            // Éviter msg.copy() de votre code original
-            BerMessage message;
+            // Si BerDecoder supportait la réinitialisation :
+            // decoder.reset();
+            // decoder.setBuf(in);
             
-            // Méthode optimisée selon l'API de votre BerDecoder
-            if (in.hasArray()) {
-                // Utiliser directement le backing array
-                byte[] array = in.array();
-                int offset = in.arrayOffset() + in.readerIndex();
-                int length = in.readableBytes();
-                message = decoder.decode(array, offset, length);
-            } else {
-                // Pour les ByteBuf directs, une copie est nécessaire
-                byte[] bytes = new byte[in.readableBytes()];
-                in.getBytes(in.readerIndex(), bytes); // getBytes ne modifie pas readerIndex
-                message = decoder.decode(bytes);
-            }
+            // Pour l'instant, utiliser le constructeur :
+            decoder = new BerDecoder(in);
             
-            if (message != null) {
+            BerMessage message = decoder.getMessage();
+            
+            if (message != null && !message.isEmpty()) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Decoded BER message: {}", 
-                             ByteBufUtil.hexDump(in, in.readerIndex(), 
-                                               Math.min(16, in.readableBytes())));
+                    LOG.debug("Decoded BER message");
                 }
                 out.add(message);
-                // Avancer le reader index selon les octets consommés
-                in.readerIndex(in.readerIndex() + decoder.getBytesConsumed());
             } else {
                 in.resetReaderIndex();
             }
             
         } catch (Exception e) {
             in.resetReaderIndex();
-            throw e;
+            handleDecodingException(ctx, e);
         } finally {
             returnDecoder(decoder);
         }
     }
     
-    private int getMinimumBerMessageSize() {
-        // Taille minimale d'un message BER (tag + length + value)
-        // Ajustez selon votre protocole spécifique
-        return 2;
+    /**
+     * Version avec optimisations avancées de lecture
+     */
+    protected void decodeOptimized(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        // Vérification minimale
+        if (in.readableBytes() < 2) {
+            return;
+        }
+        
+        // Peek rapide pour vérifier la validité sans avancer le reader
+        int readerIndex = in.readerIndex();
+        byte tag = in.getByte(readerIndex);
+        
+        if (!isValidBerTag(tag)) {
+            LOG.warn("Tag BER invalide, fermeture connexion");
+            ctx.close();
+            return;
+        }
+        
+        // Estimation rapide de la longueur du message pour éviter les copies partielles
+        int estimatedLength = estimateMessageLength(in, readerIndex);
+        if (estimatedLength > 0 && in.readableBytes() < estimatedLength) {
+            return; // Attendre plus de données
+        }
+        
+        in.markReaderIndex();
+        
+        try {
+            // Créer un slice pour éviter les modifications du ByteBuf principal
+            // (optionnel selon votre cas d'usage)
+            ByteBuf messageSlice = in.slice();
+            BerDecoder decoder = new BerDecoder(messageSlice);
+            
+            BerMessage message = decoder.getMessage();
+            
+            if (message != null && !message.isEmpty()) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Decoded BER message from {} bytes", 
+                             in.readerIndex() - readerIndex);
+                }
+                out.add(message);
+            } else {
+                in.resetReaderIndex();
+            }
+            
+        } catch (Exception e) {
+            in.resetReaderIndex();
+            handleDecodingException(ctx, e);
+        }
+    }
+    
+    /**
+     * Pool d'objets simple pour réutiliser les BerDecoder
+     */
+    private BerDecoder borrowDecoder() {
+        BerDecoder decoder = decoderPool.poll();
+        if (decoder != null) {
+            poolSize.decrementAndGet();
+            return decoder;
+        }
+        return new BerDecoder();
+    }
+    
+    private void returnDecoder(BerDecoder decoder) {
+        if (decoder != null && poolSize.get() < MAX_POOL_SIZE) {
+            // Si BerDecoder avait une méthode reset() :
+            // try {
+            //     decoder.reset();
+            //     decoderPool.offer(decoder);
+            //     poolSize.incrementAndGet();
+            // } catch (Exception e) {
+            //     // Ne pas remettre dans le pool si reset échoue
+            // }
+        }
+    }
+    
+    /**
+     * Validation rapide du tag BER
+     */
+    private boolean isValidBerTag(byte tag) {
+        // Validation basique selon le protocole BER
+        // Adaptez selon vos tags spécifiques
+        
+        // Vérifier que ce n'est pas un tag étendu (pour simplifier)
+        if ((tag & 0x1F) == 0x1F) {
+            return false; // Tags multi-octets - traitement plus complexe
+        }
+        
+        // Vérifier les classes valides (Universal, Application, Context, Private)
+        // Tous sont valides en BER, donc pas de restriction ici
+        
+        return true; // Tag valide
+    }
+    
+    /**
+     * Estimation rapide de la longueur du message pour optimiser les lectures
+     */
+    private int estimateMessageLength(ByteBuf in, int startIndex) {
+        if (in.readableBytes() < 2) {
+            return -1;
+        }
+        
+        try {
+            int index = startIndex + 1; // Skip tag
+            byte lengthByte = in.getByte(index);
+            
+            // Forme courte
+            if ((lengthByte & 0x80) == 0) {
+                return 2 + (lengthByte & 0x7F); // tag + length + content
+            }
+            
+            // Forme longue
+            int numOctets = lengthByte & 0x7F;
+            if (numOctets == 0 || numOctets > 4 || in.readableBytes() < (2 + numOctets)) {
+                return -1;
+            }
+            
+            int contentLength = 0;
+            for (int i = 0; i < numOctets; i++) {
+                contentLength = (contentLength << 8) | (in.getUnsignedByte(index + 1 + i));
+            }
+            
+            return 1 + 1 + numOctets + contentLength; // tag + length_indicator + length_octets + content
+            
+        } catch (Exception e) {
+            return -1; // Erreur d'estimation
+        }
+    }
+    
+    /**
+     * Gestion centralisée des erreurs de décodage
+     */
+    private void handleDecodingException(ChannelHandlerContext ctx, Exception e) {
+        if (e instanceof IOException) {
+            String msg = e.getMessage();
+            if (msg != null && (msg.contains("Can't read next field") || 
+                               msg.contains("Pas assez") ||
+                               msg.contains("not enough"))) {
+                // Données incomplètes - comportement normal
+                return;
+            }
+        }
+        
+        if (LOG.isWarnEnabled()) {
+            LOG.warn("Erreur de décodage BER sur {}: {}", 
+                     ctx.channel().remoteAddress(), e.getMessage());
+        }
+        
+        // Fermer la connexion en cas d'erreur de décodage grave
+        ctx.close();
     }
     
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        // Nettoyage des resources thread-local si nécessaire
-        decoderThreadLocal.remove();
+        // Nettoyer le pool si utilisé
+        decoderPool.clear();
+        poolSize.set(0);
         super.channelInactive(ctx);
     }
     
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         if (LOG.isErrorEnabled()) {
-            LOG.error("Erreur de décodage BER sur canal {}", ctx.channel(), cause);
+            LOG.error("Exception dans BerDecoderHandler pour {}", 
+                     ctx.channel().remoteAddress(), cause);
         }
         ctx.close();
+    }
+    
+    /**
+     * Méthode utilitaire pour debugging et monitoring
+     */
+    public void logStats() {
+        if (LOG.isInfoEnabled()) {
+            LOG.info("BerDecoderHandler stats - Pool size: {}", poolSize.get());
+        }
     }
 }
