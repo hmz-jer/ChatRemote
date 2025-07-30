@@ -1,10 +1,19 @@
- // Fonction pour valider un timestamp dans une plage de temps
-// timestamp : timestamp en millisecondes (String)
-// seuilMs : marge de temps en millisecondes (String)
+ import java.text.SimpleDateFormat
+import java.util.TimeZone
+
+// Fonction pour valider un timestamp dans une plage de temps
+// timestampStr : timestamp au format "yyyyMMddTHH:mm:ss.SssZ" (String)
+// seuilStr : marge de temps en millisecondes (String)
 def validateTimestamp(String timestampStr, String seuilStr) {
     try {
-        long timestamp = timestampStr.toLong()
         long seuilMs = seuilStr.toLong()
+        
+        // Parser le timestamp au format yyyyMMddTHH:mm:ss.SssZ
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd'T'HH:mm:ss.SSSZ")
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        
+        Date parsedDate = sdf.parse(timestampStr)
+        long timestamp = parsedDate.getTime()
         
         long now = System.currentTimeMillis()
         long minTime = now - seuilMs
@@ -17,24 +26,33 @@ def validateTimestamp(String timestampStr, String seuilStr) {
             return "Ko"
         }
     } catch (NumberFormatException e) {
-        return "Erreur: Paramètres invalides (${e.message})"
+        return "Erreur: Seuil invalide (${e.message})"
+    } catch (Exception e) {
+        return "Erreur: Format timestamp invalide (${e.message})"
     }
 }
 
 // Version avec debug pour voir les valeurs
 def validateTimestampDebug(String timestampStr, String seuilStr) {
     try {
-        long timestamp = timestampStr.toLong()
         long seuilMs = seuilStr.toLong()
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd'T'HH:mm:ss.SSSZ")
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        
+        Date parsedDate = sdf.parse(timestampStr)
+        long timestamp = parsedDate.getTime()
         
         long now = System.currentTimeMillis()
         long minTime = now - seuilMs
         long maxTime = now + seuilMs
         
         println "Now: ${now} (${new Date(now)})"
-        println "Timestamp reçu: '${timestampStr}' -> ${timestamp} (${new Date(timestamp)})"
+        println "Timestamp reçu: '${timestampStr}'"
+        println "Timestamp parsé: ${timestamp} (${new Date(timestamp)})"
         println "Seuil reçu: '${seuilStr}' -> ${seuilMs} ms"
         println "Plage valide: [${minTime}, ${maxTime}]"
+        println "Différence avec maintenant: ${Math.abs(now - timestamp)} ms"
         
         if (timestamp > minTime && timestamp < maxTime) {
             return "Ok"
@@ -42,7 +60,9 @@ def validateTimestampDebug(String timestampStr, String seuilStr) {
             return "Ko"
         }
     } catch (NumberFormatException e) {
-        return "Erreur: Paramètres invalides (${e.message})"
+        return "Erreur: Seuil invalide (${e.message})"
+    } catch (Exception e) {
+        return "Erreur: Format timestamp invalide (${e.message})"
     }
 }
 
