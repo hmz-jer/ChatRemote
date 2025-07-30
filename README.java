@@ -1,25 +1,50 @@
-  Voici comment écrire un test Postman pour vérifier ces conditions :Dans l'onglet Tests de votre requête Postman, ajoutez ce code JavaScript :// Test pour vérifier que le code de statut est 400
-pm.test("Status code is 400", function () {
-    pm.response.to.have.status(400);
-});
+  // Fonction pour valider un timestamp dans une plage de temps
+def validateTimestamp(long timestamp, long seuil) {
+    long now = System.currentTimeMillis()
+    long minTime = now - seuil
+    long maxTime = now + seuil
+    
+    if (timestamp > minTime && timestamp < maxTime) {
+        return "Ok"
+    } else {
+        return "Ko"
+    }
+}
 
-// Test pour vérifier le contenu du corps de la réponse
-pm.test("Response contains type and code format error", function () {
-    // Parse le JSON de la réponse
-    const responseJson = pm.response.json();
+// Version alternative avec Date pour plus de lisibilité
+def validateTimestampWithDate(long timestamp, long seuil) {
+    Date now = new Date()
+    Date minTime = new Date(now.time - seuil)
+    Date maxTime = new Date(now.time + seuil)
+    Date timestampDate = new Date(timestamp)
     
-    // Vérifie que la propriété 'type' existe
-    pm.expect(responseJson).to.have.property('type');
+    println "Timestamp à vérifier: ${timestampDate}"
+    println "Plage acceptée: ${minTime} à ${maxTime}"
     
-    // Vérifie que la propriété 'code' existe et a la valeur "format error"
-    pm.expect(responseJson).to.have.property('code');
-    pm.expect(responseJson.code).to.eql("format error");
-});Ou si vous voulez un test plus compact :pm.test("Status code is 400 and response format is correct", function () {
-    // Vérification du statut
-    pm.response.to.have.status(400);
-    
-    // Parse et vérification du JSON
-    const responseJson = pm.response.json();
-    pm.expect(responseJson).to.have.property('type');
-    pm.expect(responseJson.code).to.eql("format error");
-});Explications :pm.test() : Crée un test nommépm.response.to.have.status(400) : Vérifie le code de statut HTTPpm.response.json() : Parse la réponse JSONpm.expect().to.have.property() : Vérifie qu'une propriété existepm.expect().to.eql() : Vérifie qu'une valeur est égale à une valeur attendueCes tests apparaîtront dans l'onglet Test Results après l'exécution de votre requête, avec un indicateur vert (✓) si ils passent ou rouge (✗) s'ils échouent.
+    if (timestamp > minTime.time && timestamp < maxTime.time) {
+        return "Ok"
+    } else {
+        return "Ko"
+    }
+}
+
+// Exemples d'utilisation
+long seuil = 5000 // 5 secondes en millisecondes
+long maintenant = System.currentTimeMillis()
+
+// Test avec un timestamp valide (dans la plage)
+long timestampValide = maintenant + 2000 // +2 secondes
+println "Test timestamp valide: ${validateTimestamp(timestampValide, seuil)}"
+
+// Test avec un timestamp invalide (hors plage)
+long timestampInvalide = maintenant + 10000 // +10 secondes
+println "Test timestamp invalide: ${validateTimestamp(timestampInvalide, seuil)}"
+
+// Test avec timestamp passé invalide
+long timestampPasse = maintenant - 10000 // -10 secondes
+println "Test timestamp passé: ${validateTimestamp(timestampPasse, seuil)}"
+
+// Version avec affichage détaillé
+println "\n--- Test détaillé ---"
+println validateTimestampWithDate(timestampValide, seuil)
+println validateTimestampWithDate(timestampInvalide, seuil)
