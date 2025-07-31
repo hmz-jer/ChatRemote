@@ -1,26 +1,32 @@
  import java.text.SimpleDateFormat
 import java.util.TimeZone
+import java.util.regex.Pattern
 
-// Fonction pour valider un timestamp dans une plage de temps
-// timestampStr : timestamp au format "yyyyMMddTHH:mm:ss.SssZ" (String)
+// Pattern regex pour valider le format ISO8601 complet
+def ISO8601_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1-9})?(([\+\-][0-9]{2}:[0-9]{2})|Z)$/
+
+// Fonction pour valider un timestamp dans une plage de temps (tout en UTC)
+// timestampStr : timestamp au format ISO8601 complet (String)
 // seuilStr : marge de temps en millisecondes (String)
 def validateTimestamp(String timestampStr, String seuilStr) {
     try {
         long seuilMs = seuilStr.toLong()
         
-        // Parser le timestamp au format yyyyMMddTHH:mm:ss.SssZ
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd'T'HH:mm:ss.SSSZ")
-        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        // Vérifier que le format correspond au pattern ISO8601
+        if (!timestampStr.matches(ISO8601_PATTERN)) {
+            return "Erreur: Format timestamp ne correspond pas au pattern ISO8601"
+        }
         
-        Date parsedDate = sdf.parse(timestampStr)
-        long timestamp = parsedDate.getTime()
+        // Parser le timestamp ISO8601 avec gestion multiple formats
+        long timestampUtc = parseISO8601ToUTC(timestampStr)
         
-        long now = System.currentTimeMillis()
-        long minTime = now - seuilMs
-        long maxTime = now + seuilMs
+        // Temps actuel en UTC (System.currentTimeMillis() est déjà en UTC)
+        long nowUtc = System.currentTimeMillis()
+        long minTimeUtc = nowUtc - seuilMs
+        long maxTimeUtc = nowUtc + seuilMs
         
-        // Condition: (now - seuil) < timestamp < (now + seuil)
-        if (timestamp > minTime && timestamp < maxTime) {
+        // Condition: (nowUtc - seuil) < timestampUtc < (nowUtc + seuil)
+        if (timestampUtc > minTimeUtc && timestampUtc < maxTimeUtc) {
             return "Ok"
         } else {
             return "Ko"
@@ -28,33 +34,80 @@ def validateTimestamp(String timestampStr, String seuilStr) {
     } catch (NumberFormatException e) {
         return "Erreur: Seuil invalide (${e.message})"
     } catch (Exception e) {
-        return "Erreur: Format timestamp invalide (${e.message})"
+        return "Erreur: ${e.message}"
     }
 }
 
-// Version avec debug pour voir les valeurs
+// Fonction pour parser tous les formats ISO8601 vers UTC
+def parseISO8601ToUTC(String timestampStr) {
+    try {
+        // Formats possibles à tester dans l'ordre
+        def formats = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",  // 2025-07-30T14:30:45.123+02:00
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",   // 2025-07-30T14:30:45.123Z
+            "yyyy-MM-dd'T'HH:mm:ssXXX",       // 2025-07-30T14:30:45+02:00
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",       // 2025-07-30T14:30:45Z
+            "yyyy-MM-dd'T'HH:mm:ss.S'Z'",     // 2025-07-30T14:30:45.1Z
+            "yyyy-MM-dd'T'HH:mm:ss.SS'Z'",    // 2025-07-30T14:30:45.12Z
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSS'Z'" // 2025-07-30T14:30:45.1234567Z
+        ]
+        
+        Exception lastException = null
+        
+        for (String format : formats) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(format)
+                sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+                Date parsedDate = sdf.parse(timestampStr)
+                return parsedDate.getTime()
+            } catch (Exception e) {
+                lastException = e
+                continue
+            }
+        }
+        
+        throw new Exception("Impossible de parser le timestamp ISO8601: ${timestampStr}")
+        
+    } catch (Exception e) {
+        throw new Exception("Erreur parsing ISO8601: ${e.message}")
+    }
+}
+
+// Version avec debug pour voir les valeurs (tout en UTC)
 def validateTimestampDebug(String timestampStr, String seuilStr) {
     try {
         long seuilMs = seuilStr.toLong()
         
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd'T'HH:mm:ss.SSSZ")
-        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        // Vérifier le pattern
+        boolean matchesPattern = timestampStr.matches(ISO8601_PATTERN)
+        println "=== Validation Pattern ISO8601 ==="
+        println "Timestamp: '${timestampStr}'"
+        println "Correspond au pattern: ${matchesPattern}"
         
-        Date parsedDate = sdf.parse(timestampStr)
-        long timestamp = parsedDate.getTime()
+        if (!matchesPattern) {
+            return "Erreur: Format timestamp ne correspond pas au pattern ISO8601"
+        }
         
-        long now = System.currentTimeMillis()
-        long minTime = now - seuilMs
-        long maxTime = now + seuilMs
+        // Parser vers UTC
+        long timestampUtc = parseISO8601ToUTC(timestampStr)
         
-        println "Now: ${now} (${new Date(now)})"
-        println "Timestamp reçu: '${timestampStr}'"
-        println "Timestamp parsé: ${timestamp} (${new Date(timestamp)})"
-        println "Seuil reçu: '${seuilStr}' -> ${seuilMs} ms"
-        println "Plage valide: [${minTime}, ${maxTime}]"
-        println "Différence avec maintenant: ${Math.abs(now - timestamp)} ms"
+        long nowUtc = System.currentTimeMillis()
+        long minTimeUtc = nowUtc - seuilMs
+        long maxTimeUtc = nowUtc + seuilMs
         
-        if (timestamp > minTime && timestamp < maxTime) {
+        // Formatter pour affichage UTC
+        SimpleDateFormat displaySdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+        displaySdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        
+        println "=== Comparaison en UTC ==="
+        println "Maintenant UTC: ${nowUtc} (${displaySdf.format(new Date(nowUtc))})"
+        println "Timestamp parsé UTC: ${timestampUtc} (${displaySdf.format(new Date(timestampUtc))})"
+        println "Seuil: ${seuilMs} ms"
+        println "Plage valide UTC: [${minTimeUtc}, ${maxTimeUtc}]"
+        println "Différence: ${Math.abs(nowUtc - timestampUtc)} ms"
+        println "Dans la plage? ${timestampUtc > minTimeUtc && timestampUtc < maxTimeUtc}"
+        
+        if (timestampUtc > minTimeUtc && timestampUtc < maxTimeUtc) {
             return "Ok"
         } else {
             return "Ko"
@@ -62,32 +115,55 @@ def validateTimestampDebug(String timestampStr, String seuilStr) {
     } catch (NumberFormatException e) {
         return "Erreur: Seuil invalide (${e.message})"
     } catch (Exception e) {
-        return "Erreur: Format timestamp invalide (${e.message})"
+        return "Erreur: ${e.message}"
     }
 }
 
 // Exemples d'utilisation
 long seuilMs = 5000 // 5000 millisecondes = 5 secondes
-// Exemples d'utilisation avec des String
-long maintenant = System.currentTimeMillis()
+// Exemples d'utilisation avec tous les formats ISO8601 supportés
+import java.text.SimpleDateFormat
 
-// Test avec un timestamp valide (dans la plage de ±5 secondes)
-String timestampValide = String.valueOf(maintenant + 2000) // +2000 ms = +2 secondes
 String seuil = "5000" // 5000 ms = 5 secondes
-println "Test timestamp valide: ${validateTimestamp(timestampValide, seuil)}"
 
-// Test avec un timestamp invalide (hors plage)
-String timestampInvalide = String.valueOf(maintenant + 10000) // +10000 ms = +10 secondes
-println "Test timestamp invalide: ${validateTimestamp(timestampInvalide, seuil)}"
+// Test avec différents formats ISO8601 valides
+println "=== Tests avec différents formats ISO8601 ==="
 
-// Test avec timestamp passé invalide
-String timestampPasse = String.valueOf(maintenant - 8000) // -8000 ms = -8 secondes
-println "Test timestamp passé: ${validateTimestamp(timestampPasse, seuil)}"
+// Format avec timezone UTC (Z)
+String timestamp1 = "2025-07-30T14:30:45Z"
+println "Format Z: ${validateTimestamp(timestamp1, seuil)}"
 
-// Test avec des paramètres invalides
-println "Test paramètre invalide: ${validateTimestamp('abc', seuil)}"
-println "Test seuil invalide: ${validateTimestamp(timestampValide, 'xyz')}"
+// Format avec millisecondes et UTC
+String timestamp2 = "2025-07-30T14:30:45.123Z"
+println "Format avec ms Z: ${validateTimestamp(timestamp2, seuil)}"
 
-// Test avec debug pour voir les détails
-println "\n--- Test avec debug ---"
-println "Résultat: ${validateTimestampDebug(timestampValide, seuil)}"
+// Format avec timezone offset
+String timestamp3 = "2025-07-30T14:30:45+02:00"
+println "Format avec timezone +02:00: ${validateTimestamp(timestamp3, seuil)}"
+
+// Format avec millisecondes et timezone offset
+String timestamp4 = "2025-07-30T14:30:45.123+02:00"
+println "Format avec ms et timezone: ${validateTimestamp(timestamp4, seuil)}"
+
+// Format avec timezone négative
+String timestamp5 = "2025-07-30T14:30:45.456-05:00"
+println "Format timezone négative: ${validateTimestamp(timestamp5, seuil)}"
+
+// Formats avec différentes précisions de millisecondes
+String timestamp6 = "2025-07-30T14:30:45.1Z"      // 1 chiffre
+String timestamp7 = "2025-07-30T14:30:45.12Z"     // 2 chiffres
+String timestamp8 = "2025-07-30T14:30:45.123Z"    // 3 chiffres
+
+println "1 chiffre ms: ${validateTimestamp(timestamp6, seuil)}"
+println "2 chiffres ms: ${validateTimestamp(timestamp7, seuil)}"
+println "3 chiffres ms: ${validateTimestamp(timestamp8, seuil)}"
+
+// Tests avec des formats invalides
+println "\n=== Tests avec formats invalides ==="
+println "Format invalide 1: ${validateTimestamp('2025/07/30T14:30:45Z', seuil)}"
+println "Format invalide 2: ${validateTimestamp('2025-07-30 14:30:45', seuil)}"
+println "Format invalide 3: ${validateTimestamp('2025-07-30T14:30:45.0Z', seuil)}" // .0 invalide
+
+// Test avec debug complet
+println "\n=== Test avec debug complet ==="
+println "Résultat: ${validateTimestampDebug(timestamp4, seuil)}"
