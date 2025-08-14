@@ -1,4 +1,4 @@
- openapi: 3.0.3
+openapi: 3.0.3
 info:
   title: Healthcheck API
   description: API de vérification de santé avec redirection vers le service backend
@@ -84,12 +84,13 @@ x-axway-config:
   routing:
     - path: "/healthcheck"
       method: "GET"
-      backend_path: "/healthcheck"
+      backend_path: "/"
       backend_method: "GET"
   policies:
     - name: "routing"
       configuration:
-        target_url: "http://localhost:8080/healthcheck"
+        target_url: "http://localhost:8080"
+        target_path: "/healthcheck"
         preserve_host: false
         timeout: 5000
     - name: "cors"
