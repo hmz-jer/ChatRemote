@@ -1,36 +1,122 @@
- Voici comment obtenir la date actuelle en supprimant les zéros à la fin des millisecondes :Dans Postman (Pre-request Script)// Obtenir la date actuelle
-const now = new Date();
+ openapi: 3.0.3
+info:
+  title: Healthcheck API
+  description: API de vérification de santé avec redirection vers le service backend
+  version: 1.0.0
+  contact:
+    name: Support API
+    email: support@exemple.com
 
-// Convertir en ISO string et supprimer les zéros trailing des millisecondes
-let isoString = now.toISOString();
+servers:
+  - url: https://localhost:8443
+    description: Serveur API Gateway Axway
 
-// Supprimer les zéros à la fin des millisecondes
-// Exemple: 2025-08-01T10:30:45.120Z → 2025-08-01T10:30:45.12Z
-isoString = isoString.replace(/(\.\d*?)0+Z$/, '$1Z');
+paths:
+  /healthcheck:
+    get:
+      summary: Vérification de santé du service
+      description: Endpoint de healthcheck qui redirige vers le service backend
+      operationId: getHealthcheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service en bonne santé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "OK"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-03-14T10:30:00Z"
+                  service:
+                    type: string
+                    example: "application-backend"
+              examples:
+                success:
+                  summary: Réponse de succès
+                  value:
+                    status: "OK"
+                    timestamp: "2024-03-14T10:30:00Z"
+                    service: "application-backend"
+        '503':
+          description: Service indisponible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ERROR"
+                  message:
+                    type: string
+                    example: "Service backend indisponible"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-03-14T10:30:00Z"
+        '500':
+          description: Erreur interne du serveur
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ERROR"
+                  message:
+                    type: string
+                    example: "Erreur interne"
 
-// Si toutes les millisecondes sont à zéro, supprimer complètement
-// Exemple: 2025-08-01T10:30:45.000Z → 2025-08-01T10:30:45Z
-isoString = isoString.replace(/\.0+Z$/, 'Z');
+# Configuration spécifique pour Axway API Gateway
+x-axway-config:
+  backend:
+    url: "http://localhost:8080"
+    timeout: 5000
+    retries: 2
+  routing:
+    - path: "/healthcheck"
+      method: "GET"
+      backend_path: "/healthcheck"
+      backend_method: "GET"
+  policies:
+    - name: "routing"
+      configuration:
+        target_url: "http://localhost:8080/healthcheck"
+        preserve_host: false
+        timeout: 5000
+    - name: "cors"
+      configuration:
+        allow_origins: ["*"]
+        allow_methods: ["GET"]
+        allow_headers: ["Content-Type", "Authorization"]
 
-// Stocker dans une variable d'environnement
-pm.environment.set("current_timestamp", isoString);
+tags:
+  - name: Health
+    description: Endpoints de vérification de santé
 
-console.log("Timestamp généré:", isoString);Alternative plus simpleconst now = new Date();
-let timestamp = now.toISOString();
-
-// Supprimer les zéros trailing avec une regex plus simple
-timestamp = timestamp.replace(/0+Z$/, 'Z').replace(/\.Z$/, 'Z');
-
-pm.environment.set("current_timestamp", timestamp);Fonction réutilisablefunction formatTimestampWithoutTrailingZeros() {
-    const now = new Date();
-    let iso = now.toISOString();
-    
-    // Supprimer les zéros à la fin des millisecondes
-    return iso.replace(/(\.\d*?)0+Z$/, '$1Z').replace(/\.Z$/, 'Z');
-}
-
-// Utilisation
-pm.environment.set("current_timestamp", formatTimestampWithoutTrailingZeros());Dans le corps de la requêteUtilisez ensuite la variable dans votre JSON :{
-  "timestamp": "{{current_timestamp}}",
-  "data": "some data"
-}Exemples de résultats2025-08-01T10:30:45.123Z → 2025-08-01T10:30:45.123Z (pas de changement)2025-08-01T10:30:45.120Z → 2025-08-01T10:30:45.12Z (zéro supprimé)2025-08-01T10:30:45.100Z → 2025-08-01T10:30:45.1Z (deux zéros supprimés)2025-08-01T10:30:45.000Z → 2025-08-01T10:30:45Z (toutes les millisecondes supprimées)Cette approche garantit que votre timestamp respectera le pattern de validation qui rejette les zéros trailing.
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["OK", "ERROR"]
+        timestamp:
+          type: string
+          format: date-time
+        service:
+          type: string
+        message:
+          type: string
+      required:
+        - status
+        - timestamp
