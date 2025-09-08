@@ -1,13 +1,2 @@
-Objet : Remboursement titre de transport – facture de juillet et copie du contrat Navigo Liberté+
-
-Bonjour [Nom/Service Paie/RH],
-
-Veuillez trouver ci-joint :
-
-la facture du mois de juillet [2025] relative à mon abonnement Navigo Liberté+ ;
-
-une copie de mon contrat Navigo Liberté+.
-
-Comme il n’existe pas d’attestation spécifique pour le contrat Liberté+, je vous transmets le contrat en lieu et place d’une attestation pour justifier le paiement et la période couverte.
-
-  
+La version actuelle pgAdmin 8.5 n’est pas compatible avec PostgreSQL et pose des problèmes.
+Merci d’installer la version 8.13 sur ma machine (IP : <ton IP>).
