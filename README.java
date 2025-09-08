@@ -1,42 +1,13 @@
-services:
-  postgresql94:
-    image: postgres:9.4
-    container_name: postgresql94
-    environment:
-      POSTGRES_DB: mydb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password123
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - postgres-network
-    restart: unless-stopped
+Objet : Remboursement titre de transport – facture de juillet et copie du contrat Navigo Liberté+
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin4
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - "8080:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - postgres-network
-    depends_on:
-      - postgresql94
-    restart: unless-stopped
+Bonjour [Nom/Service Paie/RH],
 
-volumes:
-  postgres_data:
-    driver: local
-  pgadmin_data:
-    driver: local
+Veuillez trouver ci-joint :
 
-networks:
-  postgres-network:
-    driver: bridge
+la facture du mois de juillet [2025] relative à mon abonnement Navigo Liberté+ ;
+
+une copie de mon contrat Navigo Liberté+.
+
+Comme il n’existe pas d’attestation spécifique pour le contrat Liberté+, je vous transmets le contrat en lieu et place d’une attestation pour justifier le paiement et la période couverte.
+
+  
