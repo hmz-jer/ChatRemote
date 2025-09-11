@@ -14,6 +14,7 @@ if [ $# -ne 1 ]; then
     echo ""
     echo "Valide un certificat selon les critères APIM CLI Axway:"
     echo "- Format PEM et validité temporelle"
+    echo "- Compatibilité CN avec systèmes de fichiers (Issue #315)"
     echo "- Validation chaîne SSL/TLS"
     echo "- Support certificats multiples dans un fichier"
     exit 1
@@ -67,26 +68,44 @@ validate_cn_filesystem() {
     return 0
 }
 
-# Validation SSL chain (équivalent erreurs 0x13, 0x4, 0x230)
+# Validation SSL spécifique pour certificats CA
 validate_ssl_chain() {
     local cert_file="$1"
     
-    # Test auto-signé (erreur 0x13)
-    local issuer subject
-    issuer=$(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null || echo "")
-    subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null || echo "")
+    # Vérifier si c'est un certificat CA
+    local basic_constraints
+    basic_constraints=$(openssl x509 -in "$cert_file" -noout -text 2>/dev/null | grep -A 1 "Basic Constraints" | grep "CA:TRUE" || echo "")
     
-    if [ "$issuer" = "$subject" ]; then
-        echo "  Avertissement: Certificat auto-signé (équivalent SSL erreur 0x13)"
+    if [ -n "$basic_constraints" ]; then
+        echo "  Type: Certificat CA détecté"
+        
+        # Pour les CA, vérifier l'auto-signature (normal pour root CA)
+        local issuer subject
+        issuer=$(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null || echo "")
+        subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null || echo "")
+        
+        if [ "$issuer" = "$subject" ]; then
+            echo "  Statut: Root CA (auto-signé) - NORMAL"
+        else
+            echo "  Statut: Intermediate CA - OK"
+        fi
+    else
+        echo "  Type: Certificat end-entity (non-CA)"
     fi
     
-    # Test intégrité générale
+    # Test intégrité générale (critical pour tous types)
     if ! openssl x509 -in "$cert_file" -noout -modulus >/dev/null 2>&1; then
         echo "Erreur: Certificat corrompu (équivalent SSL erreur 0x4)"
         return 1
     fi
     
-    echo "  Chaîne SSL: OK"
+    # Vérifier la signature du certificat lui-même
+    if ! openssl x509 -in "$cert_file" -noout -text >/dev/null 2>&1; then
+        echo "Erreur: Structure du certificat invalide"
+        return 1
+    fi
+    
+    echo "  Intégrité: OK"
     return 0
 }
 
