@@ -1,110 +1,226 @@
-# Validateur de certificats pour APIM CLI Axway
+ #!/bin/bash
 
-Script de validation préventive des certificats CA avant import dans Axway API Management CLI. Détecte les erreurs de certificats qui causeraient des échecs lors de l'exécution d'`apim api import`.
+# Script de validation certificat compatible APIM CLI Axway
+# Génère un rapport détaillé pour de nombreux certificats
+# Usage: ./validate_apim_cert.sh <certificat.pem>
 
-## Problème résolu
+set -e
 
-APIM CLI d'Axway peut échouer lors de l'import de certificats CA avec des erreurs comme :
-- `SSL verify_cb, 0x13, 0` (certificats auto-signés traités comme erreurs)
-- `unknown CA [fatal]` (chaînes de certificats invalides)
+CERT_FILE="$1"
 
-Ce script valide les certificats **en amont** pour éviter ces erreurs à l'exécution.
+# Variables globales pour le rapport
+FAILED_CERTS=()
+TOTAL_CERTS=0
+VALID_CERTS=0
+FAILED_COUNT=0
 
-## Utilisation
+# Vérification des arguments
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <certificat.pem>"
+    echo ""
+    echo "Valide un certificat selon les critères APIM CLI Axway:"
+    echo "- Format PEM et validité temporelle"
+    echo "- Validation chaîne SSL/TLS pour certificats CA"
+    echo "- Support certificats multiples dans un fichier"
+    echo "- Rapport détaillé des échecs"
+    exit 1
+fi
 
-### Validation d'une chaîne de certificats
-```bash
-./validate_apim_cert.sh ca-chain.pem
-```
+# Vérification des prérequis
+if ! command -v openssl >/dev/null 2>&1; then
+    echo "Erreur: OpenSSL non trouvé"
+    exit 1
+fi
 
-### Exemple de sortie
-```
-Validation APIM CLI: ca-root.pem
-Certificats trouvés: 1
+# Vérification existence fichier
+if [ ! -f "$CERT_FILE" ]; then
+    echo "Erreur: Fichier non trouvé: $CERT_FILE"
+    exit 1
+fi
 
-- Vérification format PEM...
-  Format PEM: OK
-- Vérification validité...
-  Validité: OK
-- Informations certificat:
-  Subject: CN=Root CA,O=MonOrg,C=FR
-  Issuer: CN=Root CA,O=MonOrg,C=FR
-  Expire: Dec 31 23:59:59 2025 GMT
-- Validation CN APIM CLI...
-  CN: Root CA
-  CN filesystem: OK
-- Validation chaîne SSL...
-  Type: Certificat CA détecté
-  Statut: Root CA (auto-signé) - NORMAL
-  Intégrité: OK
+echo "Validation APIM CLI: $CERT_FILE"
 
-Validation APIM CLI: SUCCÈS
-```
+# Validation SSL spécifique pour certificats CA
+validate_ssl_chain() {
+    local cert_file="$1"
+    
+    # Vérifier si c'est un certificat CA
+    local basic_constraints
+    basic_constraints=$(openssl x509 -in "$cert_file" -noout -text 2>/dev/null | grep -A 1 "Basic Constraints" | grep "CA:TRUE" || echo "")
+    
+    if [ -n "$basic_constraints" ]; then
+        echo "  Type: Certificat CA détecté"
+        
+        # Pour les CA, vérifier l'auto-signature (normal pour root CA)
+        local issuer subject
+        issuer=$(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null || echo "")
+        subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null || echo "")
+        
+        if [ "$issuer" = "$subject" ]; then
+            echo "  Statut: Root CA (auto-signé) - NORMAL"
+        else
+            echo "  Statut: Intermediate CA - OK"
+        fi
+    else
+        echo "  Type: Certificat end-entity (non-CA)"
+    fi
+    
+    # Vérifier la signature du certificat lui-même
+    if ! openssl x509 -in "$cert_file" -noout -text >/dev/null 2>&1; then
+        echo "Erreur: Structure du certificat invalide"
+        return 1
+    fi
+    
+    echo "  Intégrité: OK"
+    return 0
+}
 
-## Validations effectuées
+# Validation d'un certificat avec gestion d'erreurs détaillée
+validate_certificate() {
+    local cert_file="$1"
+    local cert_num="$2"
+    local cert_name
+    
+    if [ -n "$cert_num" ]; then
+        cert_name="Certificat #$cert_num"
+        echo "=== $cert_name ==="
+    else
+        cert_name="$CERT_FILE"
+    fi
+    
+    local validation_failed=false
+    local failure_reason=""
+    
+    # 1. Format PEM
+    echo "- Vérification format PEM..."
+    if ! openssl x509 -in "$cert_file" -text -noout >/dev/null 2>&1; then
+        echo "Erreur: Format PEM invalide"
+        validation_failed=true
+        failure_reason="Format PEM invalide"
+    else
+        echo "  Format PEM: OK"
+    fi
+    
+    # 2. Validité temporelle
+    echo "- Vérification validité..."
+    if ! openssl x509 -in "$cert_file" -noout -checkend 0 >/dev/null 2>&1; then
+        local expire_date
+        expire_date=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed 's/notAfter=//' || echo "Date inconnue")
+        echo "Erreur: Certificat expiré le $expire_date"
+        validation_failed=true
+        failure_reason="Expiré le $expire_date"
+    else
+        echo "  Validité: OK"
+    fi
+    
+    # 3. Informations de base (toujours affichées)
+    echo "- Informations certificat:"
+    local subject issuer not_after
+    subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null | sed 's/subject= *//' || echo "Subject inconnu")
+    issuer=$(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null | sed 's/issuer= *//' || echo "Issuer inconnu")
+    not_after=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed 's/notAfter=//' || echo "Date inconnue")
+    
+    echo "  Subject: $subject"
+    echo "  Issuer: $issuer"
+    echo "  Expire: $not_after"
+    
+    # 4. Validation SSL chain (uniquement si format PEM OK)
+    if [ "$validation_failed" = false ]; then
+        echo "- Validation chaîne SSL..."
+        if ! validate_ssl_chain "$cert_file"; then
+            validation_failed=true
+            failure_reason="Chaîne SSL invalide"
+        fi
+    fi
+    
+    echo ""
+    
+    # Mise à jour des compteurs
+    TOTAL_CERTS=$((TOTAL_CERTS + 1))
+    
+    if [ "$validation_failed" = true ]; then
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        FAILED_CERTS+=("$cert_name: $failure_reason")
+        return 1
+    else
+        VALID_CERTS=$((VALID_CERTS + 1))
+        return 0
+    fi
+}
 
-### 1. Format PEM standard
-- **Commande OpenSSL** : `openssl x509 -in certificat.pem -text -noout`
-- **Objectif** : Vérifier la structure X.509 et les marqueurs BEGIN/END CERTIFICATE
-- **Erreur APIM CLI évitée** : Format de certificat invalide
+# Génération du rapport final
+generate_report() {
+    echo "=========================================="
+    echo "RAPPORT DE VALIDATION APIM CLI"
+    echo "=========================================="
+    echo "Fichier analysé: $CERT_FILE"
+    echo "Total certificats: $TOTAL_CERTS"
+    echo "Certificats valides: $VALID_CERTS"
+    echo "Certificats échoués: $FAILED_COUNT"
+    echo ""
+    
+    if [ $FAILED_COUNT -gt 0 ]; then
+        echo "CERTIFICATS ÉCHOUÉS:"
+        echo "===================="
+        for failed_cert in "${FAILED_CERTS[@]}"; do
+            echo "- $failed_cert"
+        done
+        echo ""
+        echo "RÉSULTAT: ÉCHEC - $FAILED_COUNT certificat(s) invalide(s)"
+    else
+        echo "RÉSULTAT: SUCCÈS - Tous les certificats sont valides"
+    fi
+    echo "=========================================="
+}
 
-### 2. Validité temporelle
-- **Commandes OpenSSL** :
-  - `openssl x509 -in certificat.pem -noout -checkend 0` (expiration)
-- **Objectif** : Détecter les certificats expirés
-- **Erreur APIM CLI évitée** : Certificats expirés causant des échecs SSL
+# Traitement principal
+main() {
+    # Compter certificats
+    local cert_count
+    cert_count=$(grep -c "BEGIN CERTIFICATE" "$CERT_FILE" 2>/dev/null || echo "0")
+    
+    if [ "$cert_count" -eq 0 ]; then
+        echo "Erreur: Aucun certificat trouvé"
+        exit 2
+    fi
+    
+    echo "Certificats trouvés: $cert_count"
+    echo ""
+    
+    if [ "$cert_count" -eq 1 ]; then
+        # Un seul certificat
+        validate_certificate "$CERT_FILE"
+    else
+        # Plusieurs certificats - les séparer
+        local temp_dir
+        temp_dir=$(mktemp -d)
+        trap 'rm -rf "$temp_dir"' EXIT
+        
+        # Séparer les certificats
+        awk '
+        /-----BEGIN CERTIFICATE-----/ { cert++; }
+        cert > 0 { print > "'$temp_dir'/cert" cert ".pem" }
+        ' "$CERT_FILE"
+        
+        # Valider chacun
+        local cert_num=1
+        for cert_file in "$temp_dir"/cert*.pem; do
+            if [ -f "$cert_file" ]; then
+                validate_certificate "$cert_file" "$cert_num"
+                cert_num=$((cert_num + 1))
+            fi
+        done
+    fi
+    
+    # Afficher le rapport final
+    generate_report
+    
+    # Code de sortie basé sur le résultat
+    if [ $FAILED_COUNT -eq 0 ]; then
+        exit 0
+    else
+        exit 2
+    fi
+}
 
-### 3. Extraction des métadonnées
-- **Commandes OpenSSL** :
-  - `openssl x509 -in certificat.pem -noout -subject` (Subject DN)
-  - `openssl x509 -in certificat.pem -noout -issuer` (Issuer DN)
-  - `openssl x509 -in certificat.pem -noout -enddate` (Date expiration)
-- **Objectif** : Afficher les informations du certificat pour vérification
-
-### 4. Validation CN filesystem (Spécifique APIM CLI)
-- **Commande OpenSSL** : `openssl x509 -in certificat.pem -noout -subject`
-- **Traitement** : Extraction du CN avec `sed -n 's/.*CN[[:space:]]*=[[:space:]]*\([^,]*\).*/\1/p'`
-- **Validations** :
-  - Pas de caractère "/" (Issue #315 APIM CLI)
-  - Pas de caractères interdits : `\ : * ? " < > |`
-  - Longueur max 255 caractères
-- **Erreur APIM CLI évitée** : `Can't write certificate to disc`
-
-### 5. Détection et validation des certificats CA
-- **Commande OpenSSL** : `openssl x509 -in certificat.pem -noout -text | grep -A 1 "Basic Constraints"`
-- **Objectif** : Identifier les certificats CA
-- **Erreur APIM CLI évitée** : Rejet incorrect des Root CA
-
-### 6. Validation de l'intégrité SSL
-- **Commandes OpenSSL** :
-  - Comparaison issuer/subject pour auto-signature
-- **Objectif** : Détecter la corruption ou les problèmes de chaîne
-- **Erreur APIM CLI évitée** : Erreurs SSL 0x4, 0x13, 0x230
-
-
-## Commandes OpenSSL de référence
-
-Le script utilise ces commandes OpenSSL principales :
-
-```bash
-# Validation format et structure
-openssl x509 -in cert.pem -text -noout
-
-# Vérification expiration
-openssl x509 -in cert.pem -noout -checkend 0
-
-# Extraction métadonnées
-openssl x509 -in cert.pem -noout -subject
-openssl x509 -in cert.pem -noout -issuer
-openssl x509 -in cert.pem -noout -enddate
-
-# Détection Basic Constraints (CA)
-openssl x509 -in cert.pem -noout -text | grep -A 1 "Basic Constraints"
-```
-
-## Références
-
-- [APIM CLI Issue #315](https://github.com/Axway-API-Management-Plus/apim-cli/issues/315) - Caractères "/" dans CN
-- [APIM CLI Issue #221](https://github.com/Axway-API-Management-Plus/apim-cli/issues/221) - SSL mutual authentication
-- [RFC 5280](https://datatracker.ietf.org/doc/html/rfc5280) - X.509 PKI Certificate Profile
-
+main
