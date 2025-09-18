@@ -1,226 +1,147 @@
- #!/bin/bash
+ # Questions à clarifier - Maquettes Application CardArt
 
-# Script de validation certificat compatible APIM CLI Axway
-# Génère un rapport détaillé pour de nombreux certificats
-# Usage: ./validate_apim_cert.sh <certificat.pem>
+## 🔍 PAGE ACCUEIL ET RECHERCHE
 
-set -e
+### 1. **Logique de recherche par Banque**
+- L'interface sera-t-elle **dédiée à chaque banque** ou **centralisée pour toutes les banques** ?
+- Si l'interface est dédiée par banque, pourquoi proposer une recherche par "Code Banque" ?
+- Qui aura accès à quoi : un utilisateur "Global Bank" voit-il les CardArts d'autres banques ?
 
-CERT_FILE="$1"
+### 2. **Types de cartes Visa/MasterCard**
+- Une même banque peut-elle émettre à la fois des cartes **Visa ET MasterCard** ?
+- Si oui, un même CardArt peut-il être utilisé pour les deux réseaux ou faut-il un CardArt distinct par réseau ?
+- Quelle est la différence métier entre "CA-CbVisa" et "CA-CbMaster" ?
 
-# Variables globales pour le rapport
-FAILED_CERTS=()
-TOTAL_CERTS=0
-VALID_CERTS=0
-FAILED_COUNT=0
+### 3. **Colonne CardArt ID**
+- Dans la colonne "CardArt ID (CardArtRefId)", que faut-il afficher exactement :
+  - L'**identifiant unique** du CardArt (ex: 0001GB01) ?
+  - Le **type de carte** (ex: CA-CbVisa) ?
+  - Les **deux informations** ?
+- Quelle est la différence entre le "CardArt ID" et le "Code Banque" ?
+- Cet identifiant est-il généré automatiquement ou saisi manuellement ?
 
-# Vérification des arguments
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <certificat.pem>"
-    echo ""
-    echo "Valide un certificat selon les critères APIM CLI Axway:"
-    echo "- Format PEM et validité temporelle"
-    echo "- Validation chaîne SSL/TLS pour certificats CA"
-    echo "- Support certificats multiples dans un fichier"
-    echo "- Rapport détaillé des échecs"
-    exit 1
-fi
+### 4. **Bouton "Afficher tout"**
+- À quoi sert le bouton "Afficher tout" si on a déjà des critères de recherche ?
+- Doit-il :
+  - Ignorer tous les filtres et afficher tous les CardArts ?
+  - Réinitialiser les filtres ?
+  - Être supprimé ?
 
-# Vérification des prérequis
-if ! command -v openssl >/dev/null 2>&1; then
-    echo "Erreur: OpenSSL non trouvé"
-    exit 1
-fi
+### 5. **Notifications "Pas de visuel par défaut"**
+- Comment peut-on avoir une notification "pas de visuel par défaut" si le visuel est **obligatoire** lors de la création ?
+- Existe-t-il des états intermédiaires où un CardArt peut exister sans visuel (brouillon, en cours de validation) ?
+- Peut-on supprimer le visuel d'un CardArt après sa création ?
 
-# Vérification existence fichier
-if [ ! -f "$CERT_FILE" ]; then
-    echo "Erreur: Fichier non trouvé: $CERT_FILE"
-    exit 1
-fi
+### 6. **Colonne "CardArt Visuel"**
+- Que doit contenir exactement la colonne "CardArt Visuel (CardArtImg)" :
+  - Le nom du fichier image ?
+  - Une miniature de la carte ?
+  - Un statut "Présent/Absent" ?
+- Est-elle utile si on affiche déjà la miniature de la carte ailleurs ?
 
-echo "Validation APIM CLI: $CERT_FILE"
+### 7. **Tri des colonnes**
+- Toutes les colonnes doivent-elles être triables ?
+- Sur quels critères les utilisateurs trient-ils habituellement leurs CardArts ?
+- Le tri sur "CardArt Visuel" a-t-il un sens métier ?
 
-# Validation SSL spécifique pour certificats CA
-validate_ssl_chain() {
-    local cert_file="$1"
-    
-    # Vérifier si c'est un certificat CA
-    local basic_constraints
-    basic_constraints=$(openssl x509 -in "$cert_file" -noout -text 2>/dev/null | grep -A 1 "Basic Constraints" | grep "CA:TRUE" || echo "")
-    
-    if [ -n "$basic_constraints" ]; then
-        echo "  Type: Certificat CA détecté"
-        
-        # Pour les CA, vérifier l'auto-signature (normal pour root CA)
-        local issuer subject
-        issuer=$(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null || echo "")
-        subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null || echo "")
-        
-        if [ "$issuer" = "$subject" ]; then
-            echo "  Statut: Root CA (auto-signé) - NORMAL"
-        else
-            echo "  Statut: Intermediate CA - OK"
-        fi
-    else
-        echo "  Type: Certificat end-entity (non-CA)"
-    fi
-    
-    # Vérifier la signature du certificat lui-même
-    if ! openssl x509 -in "$cert_file" -noout -text >/dev/null 2>&1; then
-        echo "Erreur: Structure du certificat invalide"
-        return 1
-    fi
-    
-    echo "  Intégrité: OK"
-    return 0
-}
+### 8. **Affichage de l'heure**
+- Pourquoi afficher la date et l'heure actuelles dans l'interface ?
+- Y a-t-il un besoin métier spécifique (traçabilité, sessions temporisées, deadlines) ?
+- Cette information est-elle réellement utile aux utilisateurs ?
 
-# Validation d'un certificat avec gestion d'erreurs détaillée
-validate_certificate() {
-    local cert_file="$1"
-    local cert_num="$2"
-    local cert_name
-    
-    if [ -n "$cert_num" ]; then
-        cert_name="Certificat #$cert_num"
-        echo "=== $cert_name ==="
-    else
-        cert_name="$CERT_FILE"
-    fi
-    
-    local validation_failed=false
-    local failure_reason=""
-    
-    # 1. Format PEM
-    echo "- Vérification format PEM..."
-    if ! openssl x509 -in "$cert_file" -text -noout >/dev/null 2>&1; then
-        echo "Erreur: Format PEM invalide"
-        validation_failed=true
-        failure_reason="Format PEM invalide"
-    else
-        echo "  Format PEM: OK"
-    fi
-    
-    # 2. Validité temporelle
-    echo "- Vérification validité..."
-    if ! openssl x509 -in "$cert_file" -noout -checkend 0 >/dev/null 2>&1; then
-        local expire_date
-        expire_date=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed 's/notAfter=//' || echo "Date inconnue")
-        echo "Erreur: Certificat expiré le $expire_date"
-        validation_failed=true
-        failure_reason="Expiré le $expire_date"
-    else
-        echo "  Validité: OK"
-    fi
-    
-    # 3. Informations de base (toujours affichées)
-    echo "- Informations certificat:"
-    local subject issuer not_after
-    subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null | sed 's/subject= *//' || echo "Subject inconnu")
-    issuer=$(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null | sed 's/issuer= *//' || echo "Issuer inconnu")
-    not_after=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed 's/notAfter=//' || echo "Date inconnue")
-    
-    echo "  Subject: $subject"
-    echo "  Issuer: $issuer"
-    echo "  Expire: $not_after"
-    
-    # 4. Validation SSL chain (uniquement si format PEM OK)
-    if [ "$validation_failed" = false ]; then
-        echo "- Validation chaîne SSL..."
-        if ! validate_ssl_chain "$cert_file"; then
-            validation_failed=true
-            failure_reason="Chaîne SSL invalide"
-        fi
-    fi
-    
-    echo ""
-    
-    # Mise à jour des compteurs
-    TOTAL_CERTS=$((TOTAL_CERTS + 1))
-    
-    if [ "$validation_failed" = true ]; then
-        FAILED_COUNT=$((FAILED_COUNT + 1))
-        FAILED_CERTS+=("$cert_name: $failure_reason")
-        return 1
-    else
-        VALID_CERTS=$((VALID_CERTS + 1))
-        return 0
-    fi
-}
+### 9. **Navigation générale**
+- Comment l'utilisateur navigue-t-il entre les différentes banques (si interface centralisée) ?
+- Y a-t-il des niveaux de droits différents selon les profils utilisateurs ?
+- Qui peut créer/modifier/supprimer des CardArts ?
 
-# Génération du rapport final
-generate_report() {
-    echo "=========================================="
-    echo "RAPPORT DE VALIDATION APIM CLI"
-    echo "=========================================="
-    echo "Fichier analysé: $CERT_FILE"
-    echo "Total certificats: $TOTAL_CERTS"
-    echo "Certificats valides: $VALID_CERTS"
-    echo "Certificats échoués: $FAILED_COUNT"
-    echo ""
-    
-    if [ $FAILED_COUNT -gt 0 ]; then
-        echo "CERTIFICATS ÉCHOUÉS:"
-        echo "===================="
-        for failed_cert in "${FAILED_CERTS[@]}"; do
-            echo "- $failed_cert"
-        done
-        echo ""
-        echo "RÉSULTAT: ÉCHEC - $FAILED_COUNT certificat(s) invalide(s)"
-    else
-        echo "RÉSULTAT: SUCCÈS - Tous les certificats sont valides"
-    fi
-    echo "=========================================="
-}
+---
 
-# Traitement principal
-main() {
-    # Compter certificats
-    local cert_count
-    cert_count=$(grep -c "BEGIN CERTIFICATE" "$CERT_FILE" 2>/dev/null || echo "0")
-    
-    if [ "$cert_count" -eq 0 ]; then
-        echo "Erreur: Aucun certificat trouvé"
-        exit 2
-    fi
-    
-    echo "Certificats trouvés: $cert_count"
-    echo ""
-    
-    if [ "$cert_count" -eq 1 ]; then
-        # Un seul certificat
-        validate_certificate "$CERT_FILE"
-    else
-        # Plusieurs certificats - les séparer
-        local temp_dir
-        temp_dir=$(mktemp -d)
-        trap 'rm -rf "$temp_dir"' EXIT
-        
-        # Séparer les certificats
-        awk '
-        /-----BEGIN CERTIFICATE-----/ { cert++; }
-        cert > 0 { print > "'$temp_dir'/cert" cert ".pem" }
-        ' "$CERT_FILE"
-        
-        # Valider chacun
-        local cert_num=1
-        for cert_file in "$temp_dir"/cert*.pem; do
-            if [ -f "$cert_file" ]; then
-                validate_certificate "$cert_file" "$cert_num"
-                cert_num=$((cert_num + 1))
-            fi
-        done
-    fi
-    
-    # Afficher le rapport final
-    generate_report
-    
-    # Code de sortie basé sur le résultat
-    if [ $FAILED_COUNT -eq 0 ]; then
-        exit 0
-    else
-        exit 2
-    fi
-}
+## 🎨 ÉCRAN CRÉATION DE VISUEL
 
-main
+### 1. **Logique du CardArt ID**
+- Comment se compose exactement le **CardArt ID** :
+  - L'utilisateur choisit d'abord le **type de carte** (Visa/MasterCard) puis saisit un **nom libre** ?
+  - Le format final est-il : `[Type]-[Nom saisi]` (ex: CA-CbVisa-MonNom) ?
+  - Ou bien : `[Code Banque]-[Type]-[Nom]` (ex: GB-Visa-MonNom) ?
+- Y a-t-il des **règles de nommage** à respecter (longueur, caractères autorisés) ?
+- Le système vérifie-t-il l'**unicité** du nom saisi ?
+
+### 2. **Sélection du type de carte**
+- Les **radio buttons** CA-CbVisa / CA-CbMaster :
+  - Définissent-ils le début de l'identifiant ?
+  - Ont-ils un impact sur les règles graphiques du visuel ?
+  - Conditionnent-ils d'autres champs du formulaire ?
+
+### 3. **Gestion des visuels multiples**
+- Si on peut avoir **plusieurs visuels par CardArt** :
+  - Comment désigne-t-on le **visuel par défaut** ?
+  - Y a-t-il une case à cocher "Définir comme défaut" ?
+  - Le premier visuel créé devient-il automatiquement le défaut ?
+  - Peut-on changer le visuel par défaut après création ?
+
+### 4. **Organisation des visuels**
+- Un CardArt peut-il avoir :
+  - **Plusieurs versions** d'un même visuel (v1, v2, v3) ?
+  - **Plusieurs formats** du même visuel (PNG, JPG, SVG) ?
+  - **Plusieurs déclinaisons** (avec/sans nom, différentes couleurs) ?
+- Comment l'utilisateur **distingue-t-il** ces différents visuels ?
+
+### 5. **Affichage Banque (Code/Nom)**
+- Pourquoi afficher le **code banque** et **nom banque** si l'application est dédiée à une seule banque ?
+- Ces informations sont-elles :
+  - **Pré-remplies automatiquement** selon l'utilisateur connecté ?
+  - **Modifiables** par l'utilisateur ?
+  - **Juste informatives** ?
+- Y a-t-il des cas où un utilisateur d'une banque pourrait créer des CardArts pour une autre banque ?
+
+### 6. **Processus de création**
+- Quel est l'**ordre obligatoire** de saisie :
+  1. Type de carte → Nom → Upload visuel ?
+  2. Tous les champs peuvent être remplis dans n'importe quel ordre ?
+- Peut-on **sauvegarder un brouillon** sans visuel ?
+- Y a-t-il une **validation** avant création définitive ?
+
+### 7. **Règles de gestion**
+- Si plusieurs visuels par CardArt :
+  - Comment les **numéroter/nommer** (Visuel 1, Visuel 2, ou noms spécifiques) ?
+  - Peut-on **réordonner** les visuels ?
+  - Y a-t-il une **limite** au nombre de visuels par CardArt ?
+
+### 8. **Comportement de la zone de saisie**
+- La "zone de saisie" pour le nom :
+  - A-t-elle des **suggestions automatiques** ?
+  - Vérifie-t-elle la **disponibilité** du nom en temps réel ?
+  - Formate-t-elle automatiquement le texte (majuscules, caractères spéciaux) ?
+
+### 9. **Prévisualisation**
+- L'utilisateur peut-il **prévisualiser** le CardArt ID final avant validation ?
+- Y a-t-il un **aperçu** de ce à quoi ressemblera l'identifiant complet ?
+
+### 10. **Cas d'usage concret**
+- **Scenario** : Si je veux créer un CardArt "Carte Gold Visa" :
+  - Je sélectionne "CA-CbVisa"
+  - Je saisis "Gold" dans la zone
+  - Le résultat final sera "CA-CbVisa-Gold" ?
+- Et pour créer un **deuxième visuel** de cette même carte, comment procède-t-on ?
+
+---
+
+## 📋 SYNTHÈSE DES POINTS CRITIQUES
+
+### **🚨 Incohérences détectées**
+1. **Interface par banque** vs **recherche multi-banques**
+2. **Visuel obligatoire** vs **notifications "pas de visuel"**
+3. **CardArt ID** : identifiant technique ou type de carte ?
+4. **Colonne redondante** CardArt Visuel vs miniature
+5. **Utilité de l'heure** dans l'interface
+
+### **🎯 Clarifications urgentes**
+1. **Modèle de données** : CardArt → Visuels (1 à n)
+2. **Règles métier** : création, modification, suppression
+3. **Niveaux d'accès** : qui fait quoi selon son profil
+4. **Format des identifiants** : convention de nommage
+5. **Gestion des défauts** : visuel principal par CardArt
+
+---
+
+*Ces questions permettront d'ajuster les maquettes selon les vraies règles métier et d'éviter les incohérences de conception.*
