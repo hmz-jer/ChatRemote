@@ -1,11 +1,10 @@
-
 #!/bin/bash
 
 # Script de validation certificat compatible APIM CLI Axway
 # Génère un rapport détaillé pour de nombreux certificats
 # Usage: ./validate_apim_cert.sh <certificat.pem>
 
-set -e
+# Note: pas de set -e pour permettre la collecte complète des erreurs
 
 CERT_FILE="$1"
 
@@ -240,7 +239,7 @@ main() {
         local cert_num=1
         for cert_file in "$temp_dir"/cert*.pem; do
             if [ -f "$cert_file" ]; then
-                validate_certificate "$cert_file" "$cert_num"
+                validate_certificate "$cert_file" "$cert_num" || true  # Continue même en cas d'échec
                 cert_num=$((cert_num + 1))
             fi
         done
