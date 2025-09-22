@@ -114,15 +114,30 @@ validate_certificate() {
         echo "Erreur: Format PEM invalide"
         validation_failed=true
         failure_reason="Format PEM invalide"
-    else
-        echo "  Format PEM: OK"
         
-        # Vérification des lignes vides à la fin (APIM CLI rejette)
-        if tail -n 5 "$cert_file" | grep -q "^[[:space:]]*$"; then
-            echo "Erreur: Lignes vides en fin de fichier"
-            validation_failed=true
-            failure_reason="Lignes vides en fin de fichier"
+        # Si format invalide, skip les autres validations
+        echo ""
+        TOTAL_CERTS=$((TOTAL_CERTS + 1))
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        
+        local org_name
+        org_name=$(extract_organization_name "$cert_file" 2>/dev/null || echo "")
+        
+        if [ -n "$org_name" ]; then
+            FAILED_CERTS+=("$cert_name ($org_name): $failure_reason")
+        else
+            FAILED_CERTS+=("$cert_name: $failure_reason")
         fi
+        return 1
+    fi
+    
+    echo "  Format PEM: OK"
+    
+    # Vérification des lignes vides à la fin (APIM CLI rejette)
+    if tail -n 5 "$cert_file" | grep -q "^[[:space:]]*$"; then
+        echo "Erreur: Lignes vides en fin de fichier"
+        validation_failed=true
+        failure_reason="Lignes vides en fin de fichier"
     fi
     
     # 2. Validité temporelle
