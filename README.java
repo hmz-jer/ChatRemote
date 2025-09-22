@@ -229,10 +229,24 @@ main() {
         temp_dir=$(mktemp -d)
         trap 'rm -rf "$temp_dir"' EXIT
         
-        # Séparer les certificats
+        # Séparer les certificats de manière robuste
         awk '
-        /-----BEGIN CERTIFICATE-----/ { cert++; }
-        cert > 0 { print > "'$temp_dir'/cert" cert ".pem" }
+        BEGIN { cert=0; in_cert=0 }
+        /-----BEGIN CERTIFICATE-----/ { 
+            cert++; 
+            in_cert=1;
+            filename = "'$temp_dir'/cert" cert ".pem"
+            print > filename
+            next
+        }
+        /-----END CERTIFICATE-----/ { 
+            if (in_cert) {
+                print > filename
+                in_cert=0
+            }
+            next
+        }
+        in_cert { print > filename }
         ' "$CERT_FILE"
         
         # Valider chacun
