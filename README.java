@@ -1,3 +1,13 @@
+Client / Qdev → émet la requête
+
+🧱 KDP (Kong Data Plane) → joue le rôle de reverse proxy / gateway
+
+🧠 KCP (Kong Control Plane) → centralise la config des routes/services/plugins
+
+🛠 API Admin + decK + opérateur → gèrent la configuration de Kong
+
+🐳 Docker (cardapi) → contient ton application Spring Boot (API) exposée comme un service derrière Kong
+
 #!/bin/bash
 
 # Script de validation certificat compatible APIM CLI Axway
